@@ -1,0 +1,131 @@
+//@version=6
+indicator("Market Structure Indicator", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500)
+
+//STRUCTURE SETTINGS
+upcol = input.color(color.green, "Bullish Color", group="Structure Settings")
+locol = input.color(color.red, "Bearish Color", group="Structure Settings")
+show_labels = input.bool(true, "Show BOS/CHOC Labels", group="Structure Settings")
+show_bg = input.bool(true, "Show Background Color", group="Structure Settings")
+
+//PIP SIZE CALCULATION
+GetPipSize() =>
+    syminfo.mintick * (syminfo.type == "forex" ? 10 : 1)
+
+//PIVOT DETECTION
+pvh = ta.pivothigh(1,1) 
+pvl = ta.pivotlow(1,1)
+
+h_cond = not na(pvh)
+l_cond = not na(pvl)
+
+//STRUCTURE VARIABLES
+var float hi = na 
+var float lo = na 
+var float hi1 = na 
+var float lo1 = na 
+
+var bool onel = true
+var bool ones = true 
+
+var int h_index = na 
+var int l_index = na 
+var int h_ind = na 
+var int l_ind = na 
+
+var line l1 = na 
+var line l2 = na 
+var line l3 = na 
+var line l4 = na 
+
+var bool a1 = false 
+var bool a3 = false 
+
+var bool lc = false 
+var bool sc = false 
+var int count = 0 
+
+//BAR COUNTER
+if barstate.isconfirmed
+    count := count + 1 
+
+cond1 = count > 10 
+
+//HIGHEST/LOWEST CALCULATIONS
+highest = cond1 ? ta.highest(bar_index - nz(l_index)) : 1
+h_bar = cond1 ? ta.highestbars(bar_index - nz(l_index)) : 1
+
+lowest = cond1 ? ta.lowest(bar_index - nz(h_index)) : 1
+l_bar = cond1 ? ta.lowestbars(bar_index - nz(h_index)) : 1
+
+//TREND TRACKING
+var trend = 0
+
+if ta.crossover(close, hi) or (ta.crossover(close, hi1) and lc)
+    trend := 1
+
+if ta.crossunder(close, lo) or (ta.crossunder(close, lo1) and sc)
+    trend := -1
+
+//LINE UPDATES
+if a1  
+    line.set_x2(l1, bar_index)
+
+if a3
+    line.set_x2(l3, bar_index)
+
+//BULLISH STRUCTURE
+if h_cond and onel 
+    a1 := true 
+    onel := false 
+    hi := high[1]
+    h_index := bar_index - 1 
+    l1 := line.new(x1=bar_index - 1, x2=bar_index, y1=high[1], y2=high[1], color=upcol)
+
+if ta.crossover(close, hi) 
+    a1 := false
+    onel := true 
+    sc := true 
+    lo1 := lowest
+    h_ind := bar_index + l_bar
+    l2 := line.new(x1=bar_index + l_bar, x2=bar_index, y1=lowest, y2=lowest, color=locol)
+    if show_labels
+        label.new(int(math.avg(h_index, bar_index)), hi, 'BOS', color=color(na), textcolor=upcol, style=label.style_label_down, size=size.tiny)
+
+if ta.crossunder(close, lo1) and sc 
+    sc := false 
+    ones := true 
+    line.set_x2(l2, bar_index)
+    if show_labels
+        label.new(int(math.avg(h_ind, bar_index)), lo1, 'CHOC', color=color(na), textcolor=locol, style=label.style_label_up, size=size.tiny)
+
+//BEARISH STRUCTURE
+if l_cond and ones 
+    ones := false 
+    a3 := true 
+    lo := low[1]
+    l_index := bar_index - 1
+    l3 := line.new(x1=bar_index - 1, x2=bar_index, y1=low[1], y2=low[1], color=locol)
+
+if ta.crossunder(close, lo) 
+    a3 := false
+    ones := true 
+    hi1 := highest
+    lc := true 
+    l_ind := bar_index + h_bar
+    l4 := line.new(x1=bar_index + h_bar, x2=bar_index, y1=highest, y2=highest, color=upcol)
+    if show_labels
+        label.new(int(math.avg(l_index, bar_index)), lo, 'BOS', color=color(na), textcolor=locol, style=label.style_label_up, size=size.tiny)
+
+if ta.crossover(close, hi1) and lc
+    lc := false 
+    onel := true 
+    line.set_x2(l4, bar_index)
+    if show_labels
+        label.new(int(math.avg(l_ind, bar_index)), hi1, 'CHOC', color=color(na), textcolor=upcol, style=label.style_label_down, size=size.tiny)
+
+//BACKGROUND COLOR
+bgcolor(show_bg and trend == 1 ? color.new(upcol, 90) : show_bg and trend == -1 ? color.new(locol, 90) : na)
+
+//ALERT CONDITIONS
+alertcondition(ta.crossover(close, hi) or ta.crossunder(close, lo), 'BOS Alert')
+alertcondition((ta.crossunder(close, lo1) and sc) or (ta.crossover(close, hi1) and lc), 'CHOC Alert')
