@@ -1,0 +1,70 @@
+//@version=6
+indicator("Market Structure trend", overlay=true)
+
+// Variabili per tracciare il trend
+var string currentTrend = na
+var int contraryCount = 0
+
+// Determina la direzione della candela corrente
+bool isBullishCandle = close > close[1]
+bool isBearishCandle = close < close[1]
+
+// Inizializzazione del primo trend
+if na(currentTrend)
+    if isBullishCandle
+        currentTrend := "long"
+    else if isBearishCandle
+        currentTrend := "short"
+    else
+        currentTrend := "long"
+
+// Logica di aggiornamento del trend
+if currentTrend == "long"
+    if isBearishCandle
+        contraryCount += 1
+        if contraryCount >= 2
+            currentTrend := "short"
+            contraryCount := 0
+    else
+        contraryCount := 0
+        
+else if currentTrend == "short"
+    if isBullishCandle
+        contraryCount += 1
+        if contraryCount >= 2
+            currentTrend := "long"
+            contraryCount := 0
+    else
+        contraryCount := 0
+
+// Background color HARD CODED
+bgColor = currentTrend == "long" ? color.new(color.green, 90) : color.new(color.red, 90)
+bgcolor(bgColor)
+
+// Linee per high e low
+var line highLine = na
+var line lowLine = na
+var float lastHigh = na
+var float lastLow = na
+
+// Aggiorna high e low
+if na(lastHigh)
+    lastHigh := high
+    lastLow := low
+    highLine := line.new(bar_index, high, bar_index, high, color=color.red, width=2)
+    lowLine := line.new(bar_index, low, bar_index, low, color=color.green, width=2)
+
+// Gestione linee in base al trend
+if high > lastHigh
+    line.delete(highLine)
+    lastHigh := high
+    highLine := line.new(bar_index, high, bar_index, high, color=color.red, width=2)
+else
+    line.set_x2(highLine, bar_index)
+
+if low < lastLow
+    line.delete(lowLine)
+    lastLow := low
+    lowLine := line.new(bar_index, low, bar_index, low, color=color.green, width=2)
+else
+    line.set_x2(lowLine, bar_index)
