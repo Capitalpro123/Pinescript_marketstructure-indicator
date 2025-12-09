@@ -4,10 +4,25 @@ indicator("Market Structure trend", overlay=true)
 // Variabili per tracciare il trend
 var string currentTrend = na
 var int contraryCount = 0
+var string previousTrend = na
+
+// Variabili per gestire le linee
+var line activeLine = na
+var label activeLabel = na
+var float lineLevel = na
+var float retracementStartLevel = na // Livello dove è partito il ritracciamento
+
+// Variabili per tracciare high/low precedenti
+var float lastBodyHigh = na
+var float lastBodyLow = na
 
 // Determina la direzione della candela corrente
 bool isBullishCandle = close > close[1]
 bool isBearishCandle = close < close[1]
+
+// Body high e low della candela corrente
+float currentBodyHigh = math.max(open, close)
+float currentBodyLow = math.min(open, close)
 
 // Inizializzazione del primo trend
 if na(currentTrend)
@@ -17,54 +32,96 @@ if na(currentTrend)
         currentTrend := "short"
     else
         currentTrend := "long"
+    lastBodyHigh := currentBodyHigh
+    lastBodyLow := currentBodyLow
 
-// Logica di aggiornamento del trend
-if currentTrend == "long"
-    if isBearishCandle
-        contraryCount += 1
-        if contraryCount >= 2
+// Salva il trend precedente PRIMA di aggiornare
+previousTrend := currentTrend
+
+// Logica di aggiornamento del trend - SOLO A CANDELA CHIUSA
+if barstate.isconfirmed
+    if currentTrend == "long"
+        // CONTROLLO COCH (Change of Character) per trend LONG
+        // Se candela bearish rompe il livello dove è partito il ritracciamento = inversione immediata
+        bool cochDetectedShort = isBearishCandle and not na(retracementStartLevel) and currentBodyLow < retracementStartLevel
+        
+        if cochDetectedShort
             currentTrend := "short"
             contraryCount := 0
-    else
-        contraryCount := 0
+            retracementStartLevel := na
+        else if isBearishCandle
+            contraryCount += 1
+            if contraryCount >= 2
+                currentTrend := "short"
+                retracementStartLevel := math.max(open[contraryCount], close[contraryCount]) // Salva il livello di partenza
+                contraryCount := 0
+        else
+            contraryCount := 0
+            
+    else if currentTrend == "short"
+        // CONTROLLO COCH (Change of Character) per trend SHORT
+        // Se candela bullish rompe il livello dove è partito il ritracciamento = inversione immediata
+        bool cochDetectedLong = isBullishCandle and not na(retracementStartLevel) and currentBodyHigh > retracementStartLevel
         
-else if currentTrend == "short"
-    if isBullishCandle
-        contraryCount += 1
-        if contraryCount >= 2
+        if cochDetectedLong
             currentTrend := "long"
             contraryCount := 0
-    else
-        contraryCount := 0
+            retracementStartLevel := na
+        else if isBullishCandle
+            contraryCount += 1
+            if contraryCount >= 2
+                currentTrend := "long"
+                retracementStartLevel := math.min(open[contraryCount], close[contraryCount]) // Salva il livello di partenza
+                contraryCount := 0
+        else
+            contraryCount := 0
 
 // Background color HARD CODED
 bgColor = currentTrend == "long" ? color.new(color.green, 90) : color.new(color.red, 90)
 bgcolor(bgColor)
 
-// Linee per high e low
-var line highLine = na
-var line lowLine = na
-var float lastHigh = na
-var float lastLow = na
+// Disegna linea quando parte il ritracciamento (cambio trend)
+bool trendChanged = previousTrend != currentTrend and not na(previousTrend)
 
-// Aggiorna high e low
-if na(lastHigh)
-    lastHigh := high
-    lastLow := low
-    highLine := line.new(bar_index, high, bar_index, high, color=color.red, width=2)
-    lowLine := line.new(bar_index, low, bar_index, low, color=color.green, width=2)
-
-// Gestione linee in base al trend
-if high > lastHigh
-    line.delete(highLine)
-    lastHigh := high
-    highLine := line.new(bar_index, high, bar_index, high, color=color.red, width=2)
+if trendChanged
+    // Chiudi la linea precedente se esiste
+    if not na(activeLine)
+        line.set_x2(activeLine, bar_index[2]) // Termina un po' prima
+        // Sposta la label prima della fine
+        if not na(activeLabel)
+            label.set_x(activeLabel, bar_index[2])
+    
+    // Determina il tipo di struttura e crea label
+    string structureType = na
+    
+    if currentTrend == "short" // era long, ora short = disegna linea dal body high
+        lineLevel := math.max(open[1], close[1])
+        
+        // Determina se è HH o LH
+        if not na(lastBodyHigh)
+            structureType := lineLevel > lastBodyHigh ? "HH" : "LH"
+        else
+            structureType := "HH"
+        
+        activeLine := line.new(bar_index[1], lineLevel, bar_index, lineLevel, color=color.red, width=2)
+        activeLabel := label.new(bar_index, lineLevel, structureType, color=color.red, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lastBodyHigh := lineLevel
+        
+    else if currentTrend == "long" // era short, ora long = disegna linea dal body low
+        lineLevel := math.min(open[1], close[1])
+        
+        // Determina se è LL o HL
+        if not na(lastBodyLow)
+            structureType := lineLevel < lastBodyLow ? "LL" : "HL"
+        else
+            structureType := "LL"
+        
+        activeLine := line.new(bar_index[1], lineLevel, bar_index, lineLevel, color=color.green, width=2)
+        activeLabel := label.new(bar_index, lineLevel, structureType, color=color.green, textcolor=color.white, style=label.style_label_left, size=size.small)
+        lastBodyLow := lineLevel
 else
-    line.set_x2(highLine, bar_index)
-
-if low < lastLow
-    line.delete(lowLine)
-    lastLow := low
-    lowLine := line.new(bar_index, low, bar_index, low, color=color.green, width=2)
-else
-    line.set_x2(lowLine, bar_index)
+    // Estendi la linea attiva e sposta la label
+    if not na(activeLine)
+        line.set_x2(activeLine, bar_index)
+        if not na(activeLabel)
+            label.set_x(activeLabel, bar_index)
