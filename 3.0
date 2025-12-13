@@ -1,0 +1,183 @@
+//@version=6
+indicator("MTF Structure Alignment", overlay=true, max_bars_back=5000)
+
+//═════════════════════════════════════════════════════════════════════════════
+// TIMEFRAME SELECTION
+//═════════════════════════════════════════════════════════════════════════════
+htf_selected = input.timeframe("15", "📊 MACRO TREND (HTF)", options=["15", "30", "45", "60", "120", "180", "240"], group="Multi-TimeFrame Settings")
+ltf_selected = input.timeframe("5", "🎯 ALIGNMENT (LTF)", options=["5", "15", "30", "45", "60"], group="Multi-TimeFrame Settings")
+
+//═════════════════════════════════════════════════════════════════════════════
+// STRUCTURE SETTINGS
+//═════════════════════════════════════════════════════════════════════════════
+upcol = input.color(color.green, "Bullish Color", group="Visual Settings")
+locol = input.color(color.red, "Bearish Color", group="Visual Settings")
+show_bg = input.bool(true, "Show Background When Aligned", group="Visual Settings")
+show_table = input.bool(true, "Show Status Table", group="Visual Settings")
+bg_transparency = input.int(90, "Background Transparency", minval=0, maxval=95, group="Visual Settings")
+
+//═════════════════════════════════════════════════════════════════════════════
+// STRUCTURE CALCULATION FUNCTION
+//═════════════════════════════════════════════════════════════════════════════
+calcStructure() =>
+    //PIVOT DETECTION
+    pvh = ta.pivothigh(1,1) 
+    pvl = ta.pivotlow(1,1)
+    
+    h_cond = not na(pvh)
+    l_cond = not na(pvl)
+    
+    //STRUCTURE VARIABLES
+    var float hi = na 
+    var float lo = na 
+    var float hi1 = na 
+    var float lo1 = na 
+    
+    var bool onel = true
+    var bool ones = true 
+    
+    var int h_index = na 
+    var int l_index = na 
+    var int h_ind = na 
+    var int l_ind = na 
+    
+    var bool a1 = false 
+    var bool a3 = false 
+    
+    var bool lc = false 
+    var bool sc = false 
+    var int count = 0 
+    
+    //BAR COUNTER
+    if barstate.isconfirmed
+        count := count + 1 
+    
+    cond1 = count > 10 
+    
+    //FIX: ENSURE LENGTH IS BETWEEN 1 AND 4999 (MAX LOOKBACK)
+    h_length = math.min(4999, math.max(1, bar_index - nz(h_index, bar_index)))
+    l_length = math.min(4999, math.max(1, bar_index - nz(l_index, bar_index)))
+    
+    //EXTRACT FUNCTIONS - FIX WARNINGS
+    _highest = ta.highest(h_length)
+    _h_bar = ta.highestbars(h_length)
+    _lowest = ta.lowest(l_length)
+    _l_bar = ta.lowestbars(l_length)
+    
+    highest = cond1 ? _highest : 1
+    h_bar = cond1 ? _h_bar : 1
+    lowest = cond1 ? _lowest : 1
+    l_bar = cond1 ? _l_bar : 1
+    
+    //FIX: EXTRACT CROSSOVER/CROSSUNDER - CALL ON EVERY BAR
+    cross_hi = ta.crossover(close, hi)
+    cross_lo = ta.crossunder(close, lo)
+    cross_hi1_lc = ta.crossover(close, hi1)
+    cross_lo1_sc = ta.crossunder(close, lo1)
+    
+    //TREND TRACKING
+    var trend = 0
+    
+    if cross_hi or (cross_hi1_lc and lc)
+        trend := 1
+    
+    if cross_lo or (cross_lo1_sc and sc)
+        trend := -1
+    
+    //BULLISH STRUCTURE
+    if h_cond and onel 
+        a1 := true 
+        onel := false 
+        hi := high[1]
+        h_index := bar_index - 1 
+    
+    if cross_hi
+        a1 := false
+        onel := true 
+        sc := true 
+        lo1 := lowest
+        h_ind := bar_index + l_bar
+    
+    if cross_lo1_sc and sc 
+        sc := false 
+        ones := true 
+    
+    //BEARISH STRUCTURE
+    if l_cond and ones 
+        ones := false 
+        a3 := true 
+        lo := low[1]
+        l_index := bar_index - 1
+    
+    if cross_lo
+        a3 := false
+        ones := true 
+        hi1 := highest
+        lc := true 
+        l_ind := bar_index + h_bar
+    
+    if cross_hi1_lc and lc
+        lc := false 
+        onel := true 
+    
+    trend
+
+//═════════════════════════════════════════════════════════════════════════════
+// GET TRENDS FROM SELECTED TIMEFRAMES
+//═════════════════════════════════════════════════════════════════════════════
+htf_trend = request.security(syminfo.tickerid, htf_selected, calcStructure(), lookahead=barmerge.lookahead_off)
+ltf_trend = request.security(syminfo.tickerid, ltf_selected, calcStructure(), lookahead=barmerge.lookahead_off)
+
+//═════════════════════════════════════════════════════════════════════════════
+// ALIGNMENT LOGIC
+//═════════════════════════════════════════════════════════════════════════════
+aligned = htf_trend == ltf_trend and htf_trend != 0
+bullish_aligned = aligned and htf_trend == 1
+bearish_aligned = aligned and htf_trend == -1
+
+//═════════════════════════════════════════════════════════════════════════════
+// BACKGROUND COLOR - ONLY WHEN ALIGNED
+//═════════════════════════════════════════════════════════════════════════════
+bgcolor(show_bg and bullish_aligned ? color.new(upcol, bg_transparency) : 
+        show_bg and bearish_aligned ? color.new(locol, bg_transparency) : na)
+
+//═════════════════════════════════════════════════════════════════════════════
+// STATUS TABLE
+//═════════════════════════════════════════════════════════════════════════════
+var table status_table = table.new(position.top_right, 2, 4, border_width=2)
+
+if show_table and barstate.islast
+    // Header
+    table.cell(status_table, 0, 0, "TIMEFRAME", bgcolor=color.new(color.gray, 20), text_color=color.white, text_size=size.small)
+    table.cell(status_table, 1, 0, "TREND", bgcolor=color.new(color.gray, 20), text_color=color.white, text_size=size.small)
+    
+    // HTF Row
+    htf_color = htf_trend == 1 ? color.new(upcol, 30) : htf_trend == -1 ? color.new(locol, 30) : color.new(color.gray, 50)
+    htf_text = htf_trend == 1 ? "BULLISH ▲" : htf_trend == -1 ? "BEARISH ▼" : "NEUTRAL ─"
+    htf_text_color = htf_trend == 1 ? upcol : htf_trend == -1 ? locol : color.gray
+    
+    table.cell(status_table, 0, 1, "HTF " + htf_selected, bgcolor=color.new(color.gray, 70), text_color=color.white, text_size=size.normal)
+    table.cell(status_table, 1, 1, htf_text, bgcolor=htf_color, text_color=htf_text_color, text_size=size.normal)
+    
+    // LTF Row
+    ltf_color = ltf_trend == 1 ? color.new(upcol, 30) : ltf_trend == -1 ? color.new(locol, 30) : color.new(color.gray, 50)
+    ltf_text = ltf_trend == 1 ? "BULLISH ▲" : ltf_trend == -1 ? "BEARISH ▼" : "NEUTRAL ─"
+    ltf_text_color = ltf_trend == 1 ? upcol : ltf_trend == -1 ? locol : color.gray
+    
+    table.cell(status_table, 0, 2, "LTF " + ltf_selected, bgcolor=color.new(color.gray, 70), text_color=color.white, text_size=size.normal)
+    table.cell(status_table, 1, 2, ltf_text, bgcolor=ltf_color, text_color=ltf_text_color, text_size=size.normal)
+    
+    // Alignment Status
+    align_status = aligned ? (bullish_aligned ? "✓ BULLISH ALIGNED" : "✓ BEARISH ALIGNED") : "✗ NOT ALIGNED"
+    align_color = bullish_aligned ? color.new(upcol, 20) : bearish_aligned ? color.new(locol, 20) : color.new(color.orange, 30)
+    align_text_color = aligned ? color.white : color.orange
+    
+    table.cell(status_table, 0, 3, align_status, bgcolor=align_color, text_color=align_text_color, text_size=size.normal)
+    table.cell(status_table, 1, 3, "", bgcolor=align_color, text_color=align_text_color, text_size=size.normal)
+
+//═════════════════════════════════════════════════════════════════════════════
+// ALERTS
+//═════════════════════════════════════════════════════════════════════════════
+alertcondition(ta.crossover(aligned ? 1 : 0, 0.5) and bullish_aligned, "🟢 BULLISH ALIGNMENT", "HTF and LTF are now BULLISH aligned!")
+alertcondition(ta.crossover(aligned ? 1 : 0, 0.5) and bearish_aligned, "🔴 BEARISH ALIGNMENT", "HTF and LTF are now BEARISH aligned!")
+alertcondition(ta.crossunder(aligned ? 1 : 0, 0.5), "⚠️ ALIGNMENT LOST", "HTF and LTF are no longer aligned!")
