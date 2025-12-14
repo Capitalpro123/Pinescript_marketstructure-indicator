@@ -1,0 +1,356 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// MARKET STRUCTURE MTF v3.1
+// ══════════════════════════════════════════════════════════════════════════════
+
+//@version=6
+indicator("Market Structure MTF v3.1", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INPUT - TIMEFRAME SELECTION
+// ══════════════════════════════════════════════════════════════════════════════
+
+htf_enabled = input.bool(true, "M15 Abilitato", group="M15 - Higher Timeframe")
+htf_tf = input.timeframe("15", "M15 Timeframe", options=["15", "30", "60", "120", "240"], group="M15 - Higher Timeframe")
+htf_color = input.color(color.purple, "M15 Colore", group="M15 - Higher Timeframe")
+
+mtf_enabled = input.bool(true, "M5 Abilitato", group="M5 - Medium Timeframe")
+mtf_tf = input.timeframe("5", "M5 Timeframe", options=["3", "5", "15", "30", "60", "120", "240"], group="M5 - Medium Timeframe")
+mtf_color = input.color(color.orange, "M5 Colore", group="M5 - Medium Timeframe")
+
+ltf_enabled = input.bool(true, "M3 Abilitato", group="M3 - Lower Timeframe")
+ltf_tf = input.timeframe("3", "M3 Timeframe", options=["30S", "1", "3", "5", "15", "30", "60"], group="M3 - Lower Timeframe")
+ltf_color = input.color(color.blue, "M3 Colore", group="M3 - Lower Timeframe")
+
+entry_structure_enabled = input.bool(true, "Mostra Struttura Entry TF", group="Entry Timeframe")
+entry_background_enabled = input.bool(true, "Mostra Background Entry TF", group="Entry Timeframe")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COLORI FISSI
+// ══════════════════════════════════════════════════════════════════════════════
+
+color_bull = color.green
+color_bear = color.red
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FUNZIONE: Calcola struttura
+// ══════════════════════════════════════════════════════════════════════════════
+
+calc_structure(float h, float l, float c, float o) =>
+    var int trend = 0
+    var bool in_retracement = false
+    var float bos_level = na
+    var float choc_level = na
+    var float last_cont_level = na
+    var float retrace_extreme = na
+    
+    if trend == 0
+        if c > o
+            trend := 1
+            last_cont_level := h
+        else
+            trend := -1
+            last_cont_level := l
+    
+    else if trend == -1
+        if not in_retracement
+            if l < last_cont_level
+                last_cont_level := l
+            else
+                in_retracement := true
+                bos_level := last_cont_level
+                retrace_extreme := h
+        else
+            if h > retrace_extreme
+                retrace_extreme := h
+            
+            if c < bos_level
+                choc_level := retrace_extreme
+                in_retracement := false
+                last_cont_level := l
+                bos_level := na
+                retrace_extreme := na
+            else if not na(choc_level) and c > choc_level
+                trend := 1
+                in_retracement := false
+                last_cont_level := h
+                choc_level := l
+                bos_level := na
+                retrace_extreme := na
+    
+    else if trend == 1
+        if not in_retracement
+            if h > last_cont_level
+                last_cont_level := h
+            else
+                in_retracement := true
+                bos_level := last_cont_level
+                retrace_extreme := l
+        else
+            if l < retrace_extreme
+                retrace_extreme := l
+            
+            if c > bos_level
+                choc_level := retrace_extreme
+                in_retracement := false
+                last_cont_level := h
+                bos_level := na
+                retrace_extreme := na
+            else if not na(choc_level) and c < choc_level
+                trend := -1
+                in_retracement := false
+                last_cont_level := l
+                choc_level := h
+                bos_level := na
+                retrace_extreme := na
+    
+    trend
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENTRY TF - STRUTTURA COMPLETA
+// ══════════════════════════════════════════════════════════════════════════════
+
+var int entry_trend = 0
+var bool entry_in_retracement = false
+var float entry_bos_level = na
+var int entry_bos_level_bar = na
+var line entry_bos_line = na
+var bool entry_bos_line_active = false
+var float entry_choc_level = na
+var int entry_choc_level_bar = na
+var line entry_choc_line = na
+var bool entry_choc_line_active = false
+var float entry_last_cont_level = na
+var int entry_last_cont_bar = na
+var float entry_retrace_extreme = na
+var int entry_retrace_extreme_bar = na
+
+if barstate.isconfirmed and entry_structure_enabled
+    
+    if entry_trend == 0
+        if close > open
+            entry_trend := 1
+            entry_last_cont_level := high
+            entry_last_cont_bar := bar_index
+        else
+            entry_trend := -1
+            entry_last_cont_level := low
+            entry_last_cont_bar := bar_index
+    
+    else if entry_trend == -1
+        if not entry_in_retracement
+            if low < entry_last_cont_level
+                entry_last_cont_level := low
+                entry_last_cont_bar := bar_index
+            else
+                entry_in_retracement := true
+                entry_bos_level := entry_last_cont_level
+                entry_bos_level_bar := entry_last_cont_bar
+                entry_retrace_extreme := high
+                entry_retrace_extreme_bar := bar_index
+                entry_bos_line := line.new(entry_bos_level_bar, entry_bos_level, bar_index, entry_bos_level, color=color_bear, width=1, style=line.style_solid)
+                entry_bos_line_active := true
+        else
+            if high > entry_retrace_extreme
+                entry_retrace_extreme := high
+                entry_retrace_extreme_bar := bar_index
+            
+            if entry_bos_line_active
+                line.set_x2(entry_bos_line, bar_index)
+            if entry_choc_line_active
+                line.set_x2(entry_choc_line, bar_index)
+            
+            if close < entry_bos_level
+                label.new(int(math.avg(entry_bos_level_bar, bar_index)), entry_bos_level, "BOS", color=color(na), textcolor=color_bear, style=label.style_label_up, size=size.tiny)
+                if entry_bos_line_active
+                    line.set_x2(entry_bos_line, bar_index)
+                entry_bos_line_active := false
+                if entry_choc_line_active
+                    line.set_x2(entry_choc_line, bar_index)
+                entry_choc_line_active := false
+                entry_choc_level := entry_retrace_extreme
+                entry_choc_level_bar := entry_retrace_extreme_bar
+                entry_choc_line := line.new(entry_choc_level_bar, entry_choc_level, bar_index, entry_choc_level, color=color_bull, width=1, style=line.style_solid)
+                entry_in_retracement := false
+                entry_last_cont_level := low
+                entry_last_cont_bar := bar_index
+                entry_bos_level := na
+                entry_bos_level_bar := na
+                entry_retrace_extreme := na
+                entry_retrace_extreme_bar := na
+            
+            else if not na(entry_choc_level) and close > entry_choc_level
+                label.new(int(math.avg(entry_choc_level_bar, bar_index)), entry_choc_level, "CHOC", color=color(na), textcolor=color_bull, style=label.style_label_down, size=size.tiny)
+                if entry_choc_line_active
+                    line.set_x2(entry_choc_line, bar_index)
+                entry_choc_line_active := false
+                if not na(entry_choc_line)
+                    line.set_x2(entry_choc_line, bar_index)
+                if entry_bos_line_active
+                    line.set_x2(entry_bos_line, bar_index)
+                entry_bos_line_active := false
+                entry_trend := 1
+                entry_in_retracement := false
+                entry_last_cont_level := high
+                entry_last_cont_bar := bar_index
+                entry_choc_level := low
+                entry_choc_level_bar := bar_index
+                entry_choc_line := line.new(bar_index, low, bar_index, low, color=color_bear, width=1, style=line.style_solid)
+                entry_choc_line_active := true
+                entry_bos_level := na
+                entry_bos_level_bar := na
+                entry_retrace_extreme := na
+                entry_retrace_extreme_bar := na
+    
+    else if entry_trend == 1
+        if not entry_in_retracement
+            if high > entry_last_cont_level
+                entry_last_cont_level := high
+                entry_last_cont_bar := bar_index
+            else
+                entry_in_retracement := true
+                entry_bos_level := entry_last_cont_level
+                entry_bos_level_bar := entry_last_cont_bar
+                entry_retrace_extreme := low
+                entry_retrace_extreme_bar := bar_index
+                entry_bos_line := line.new(entry_bos_level_bar, entry_bos_level, bar_index, entry_bos_level, color=color_bull, width=1, style=line.style_solid)
+                entry_bos_line_active := true
+        else
+            if low < entry_retrace_extreme
+                entry_retrace_extreme := low
+                entry_retrace_extreme_bar := bar_index
+            
+            if entry_bos_line_active
+                line.set_x2(entry_bos_line, bar_index)
+            if entry_choc_line_active
+                line.set_x2(entry_choc_line, bar_index)
+            
+            if close > entry_bos_level
+                label.new(int(math.avg(entry_bos_level_bar, bar_index)), entry_bos_level, "BOS", color=color(na), textcolor=color_bull, style=label.style_label_down, size=size.tiny)
+                if entry_bos_line_active
+                    line.set_x2(entry_bos_line, bar_index)
+                entry_bos_line_active := false
+                if entry_choc_line_active
+                    line.set_x2(entry_choc_line, bar_index)
+                entry_choc_line_active := false
+                entry_choc_level := entry_retrace_extreme
+                entry_choc_level_bar := entry_retrace_extreme_bar
+                entry_choc_line := line.new(entry_choc_level_bar, entry_choc_level, bar_index, entry_choc_level, color=color_bear, width=1, style=line.style_solid)
+                entry_in_retracement := false
+                entry_last_cont_level := high
+                entry_last_cont_bar := bar_index
+                entry_bos_level := na
+                entry_bos_level_bar := na
+                entry_retrace_extreme := na
+                entry_retrace_extreme_bar := na
+            
+            else if not na(entry_choc_level) and close < entry_choc_level
+                label.new(int(math.avg(entry_choc_level_bar, bar_index)), entry_choc_level, "CHOC", color=color(na), textcolor=color_bear, style=label.style_label_up, size=size.tiny)
+                if entry_choc_line_active
+                    line.set_x2(entry_choc_line, bar_index)
+                entry_choc_line_active := false
+                if not na(entry_choc_line)
+                    line.set_x2(entry_choc_line, bar_index)
+                if entry_bos_line_active
+                    line.set_x2(entry_bos_line, bar_index)
+                entry_bos_line_active := false
+                entry_trend := -1
+                entry_in_retracement := false
+                entry_last_cont_level := low
+                entry_last_cont_bar := bar_index
+                entry_choc_level := high
+                entry_choc_level_bar := bar_index
+                entry_choc_line := line.new(bar_index, high, bar_index, high, color=color_bull, width=1, style=line.style_solid)
+                entry_choc_line_active := true
+                entry_bos_level := na
+                entry_bos_level_bar := na
+                entry_retrace_extreme := na
+                entry_retrace_extreme_bar := na
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HTF/MTF/LTF - REQUEST SECURITY
+// ══════════════════════════════════════════════════════════════════════════════
+
+htf_trend = request.security(syminfo.tickerid, htf_tf, calc_structure(high, low, close, open))
+var int htf_prev_trend = 0
+
+mtf_trend = request.security(syminfo.tickerid, mtf_tf, calc_structure(high, low, close, open))
+var int mtf_prev_trend = 0
+
+ltf_trend = request.security(syminfo.tickerid, ltf_tf, calc_structure(high, low, close, open))
+var int ltf_prev_trend = 0
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ALTEZZE FISSE - MOLTO DISTANZIATE
+// ══════════════════════════════════════════════════════════════════════════════
+
+float atr_val = ta.atr(14)
+float offset_m15 = atr_val * 8   // M15 molto in alto
+float offset_m5 = atr_val * 5    // M5 un po' sotto
+float offset_m3 = atr_val * 2    // M3 vicino alle candele
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DETECT CHOC - ORDINE SEMPRE: 3, 5, 15
+// ══════════════════════════════════════════════════════════════════════════════
+
+if barstate.isconfirmed
+    
+    // Testo per ogni TF
+    string m3_txt = ltf_trend == 1 ? "L" : "S"
+    string m5_txt = mtf_trend == 1 ? "L" : "S"
+    string m15_txt = htf_trend == 1 ? "L" : "S"
+    
+    // M15 CHOC - POSIZIONE ALTA
+    if htf_enabled and htf_trend != htf_prev_trend and htf_prev_trend != 0
+        line.new(bar_index, low - atr_val, bar_index, high + offset_m15, color=htf_color, width=2, style=line.style_solid)
+        
+        string from_txt = htf_prev_trend == 1 ? "L" : "S"
+        string to_txt = htf_trend == 1 ? "L" : "S"
+        
+        // Ordine fisso: 3, 5, 15 (quello che cambia evidenziato)
+        string box_text = "3: " + m3_txt + "\n5: " + m5_txt + "\n15: " + from_txt + " → " + to_txt
+        
+        label.new(bar_index, high + offset_m15, box_text, color=color.new(htf_color, 70), textcolor=color.white, style=label.style_label_down, size=size.normal)
+    
+    htf_prev_trend := htf_trend
+    
+    // M5 CHOC - POSIZIONE MEDIA
+    if mtf_enabled and mtf_trend != mtf_prev_trend and mtf_prev_trend != 0
+        line.new(bar_index, low - atr_val, bar_index, high + offset_m5, color=mtf_color, width=2, style=line.style_solid)
+        
+        string from_txt = mtf_prev_trend == 1 ? "L" : "S"
+        string to_txt = mtf_trend == 1 ? "L" : "S"
+        
+        // Ordine fisso: 3, 5, 15 (quello che cambia evidenziato)
+        string box_text = "3: " + m3_txt + "\n5: " + from_txt + " → " + to_txt + "\n15: " + m15_txt
+        
+        label.new(bar_index, high + offset_m5, box_text, color=color.new(mtf_color, 70), textcolor=color.white, style=label.style_label_down, size=size.normal)
+    
+    mtf_prev_trend := mtf_trend
+    
+    // M3 CHOC - POSIZIONE BASSA
+    if ltf_enabled and ltf_trend != ltf_prev_trend and ltf_prev_trend != 0
+        line.new(bar_index, low - atr_val, bar_index, high + offset_m3, color=ltf_color, width=2, style=line.style_solid)
+        
+        string from_txt = ltf_prev_trend == 1 ? "L" : "S"
+        string to_txt = ltf_trend == 1 ? "L" : "S"
+        
+        // Ordine fisso: 3, 5, 15 (quello che cambia evidenziato)
+        string box_text = "3: " + from_txt + " → " + to_txt + "\n5: " + m5_txt + "\n15: " + m15_txt
+        
+        label.new(bar_index, high + offset_m3, box_text, color=color.new(ltf_color, 70), textcolor=color.white, style=label.style_label_down, size=size.normal)
+    
+    ltf_prev_trend := ltf_trend
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BACKGROUND ENTRY TF
+// ══════════════════════════════════════════════════════════════════════════════
+
+bgcolor(entry_background_enabled and entry_structure_enabled ? (entry_trend == 1 ? color.new(color_bull, 90) : entry_trend == -1 ? color.new(color_bear, 90) : na) : na)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(htf_trend != htf_trend[1] and htf_trend[1] != 0, "M15 CHOC", "M15 Change of Character")
+alertcondition(mtf_trend != mtf_trend[1] and mtf_trend[1] != 0, "M5 CHOC", "M5 Change of Character")
+alertcondition(ltf_trend != ltf_trend[1] and ltf_trend[1] != 0, "M3 CHOC", "M3 Change of Character")
