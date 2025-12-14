@@ -1,4 +1,16 @@
 1.0 classic indicator from photon trading, market structure with wicks and retracement
+
+=================
+
 2.0 trend indicator designed by me, rules : trend countination candele body stessa direzione, servono 2 candele per startare il ritracciamento
+-
+2.1 rilasciata il 14/12/25, riscritto il codice da 0 all 100%, risolvendo i bug creati da iz algo alla scrittura iniziale a settembre 2024, del continuamento delle linee coch, ora sia bos che coch, funzionano perfettamente, e finiscono ai punti corretti
+questa versione 2.1, verrà usata per il multi timeframe, 
+-
+================
+
 3.0 classic indicator from photon trading ma permette di applicarlo sul tf di entrata, e poi selezionare la struttura che vogliamo vedere del tf superiore selezionato, colora lo schermo con i colori della sessione a livello di trend
-4.0 classic indicato from photn trading ma con multi tf con selezione di 2 tf
+============
+
+4.0 classic indicator from photn trading ma con multi tf con selezione di 2 tf
+=========
