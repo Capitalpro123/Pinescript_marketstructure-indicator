@@ -1,13 +1,14 @@
+1.0 = classic indicator from photon
 1.0 classic indicator from photon trading, market structure with wicks and retracement
 1.1 fixed photon trading classic indicator from bug of creation by iz algo in septber 2024, with wrong coch lines
 =================
-
+2.0 = indicator designed by me, 2 candles rules
 2.0 trend indicator designed by me, rules : trend countination candele body stessa direzione, servono 2 candele per startare il ritracciamento
--
 ================
-
+3.0 = indicatore photon ma multi tf
 3.0 classic indicator from photon trading ma permette di applicarlo sul tf di entrata, e poi selezionare la struttura che vogliamo vedere del tf superiore selezionato, colora lo schermo con i colori della sessione a livello di trend
 3.1 migliorato il modo di lavoro dell indicatore, ora va applicato solo sul tf di entrata e mostra fumetti con l indicazione di ogni stato della struttura.
+3.2 reso fluido per backtest lavoro dell indicatore indicando struttura htf selezionati con linee
 ============
 
 4.0 classic indicator from photn trading ma con multi tf con selezione di 2 tf
