@@ -1,255 +1,131 @@
-// ══════════════════════════════════════════════════════════════════════════════
-// MARKET STRUCTURE INDICATOR v1.0
-// ══════════════════════════════════════════════════════════════════════════════
-
 //@version=6
-indicator("Market Structure v1.0", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500)
+indicator("Market Structure Indicator", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500)
 
-// ══════════════════════════════════════════════════════════════════════════════
-// COLORI
-// ══════════════════════════════════════════════════════════════════════════════
+//STRUCTURE SETTINGS
+upcol = input.color(color.green, "Bullish Color", group="Structure Settings")
+locol = input.color(color.red, "Bearish Color", group="Structure Settings")
+show_labels = input.bool(true, "Show BOS/CHOC Labels", group="Structure Settings")
+show_bg = input.bool(true, "Show Background Color", group="Structure Settings")
 
-color_bull = color.green
-color_bear = color.red
+//PIP SIZE CALCULATION
+GetPipSize() =>
+    syminfo.mintick * (syminfo.type == "forex" ? 10 : 1)
 
-// ══════════════════════════════════════════════════════════════════════════════
-// VARIABILI DI STATO
-// ══════════════════════════════════════════════════════════════════════════════
+//PIVOT DETECTION
+pvh = ta.pivothigh(1,1) 
+pvl = ta.pivotlow(1,1)
 
-var int trend = 0
-var bool in_retracement = false
+h_cond = not na(pvh)
+l_cond = not na(pvl)
 
-var float bos_level = na
-var int bos_level_bar = na
-var line bos_line = na
-var bool bos_line_active = false
+//STRUCTURE VARIABLES
+var float hi = na 
+var float lo = na 
+var float hi1 = na 
+var float lo1 = na 
 
-var float choc_level = na
-var int choc_level_bar = na
-var line choc_line = na
-var bool choc_line_active = false
+var bool onel = true
+var bool ones = true 
 
-var float last_continuation_level = na
-var int last_continuation_bar = na
+var int h_index = na 
+var int l_index = na 
+var int h_ind = na 
+var int l_ind = na 
 
-var float retrace_extreme = na
-var int retrace_extreme_bar = na
+var line l1 = na 
+var line l2 = na 
+var line l3 = na 
+var line l4 = na 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// LOGICA PRINCIPALE
-// ══════════════════════════════════════════════════════════════════════════════
+var bool a1 = false 
+var bool a3 = false 
 
+var bool lc = false 
+var bool sc = false 
+var int count = 0 
+
+//BAR COUNTER
 if barstate.isconfirmed
+    count := count + 1 
 
-    // ==========================================================================
-    // INIZIALIZZAZIONE
-    // ==========================================================================
-    
-    if trend == 0
-        if close > open
-            trend := 1
-            last_continuation_level := high
-            last_continuation_bar := bar_index
-        else
-            trend := -1
-            last_continuation_level := low
-            last_continuation_bar := bar_index
-    
-    // ==========================================================================
-    // TREND SHORT
-    // ==========================================================================
-    
-    else if trend == -1
-        
-        if not in_retracement
-            
-            if low < last_continuation_level
-                last_continuation_level := low
-                last_continuation_bar := bar_index
-            else
-                in_retracement := true
-                bos_level := last_continuation_level
-                bos_level_bar := last_continuation_bar
-                retrace_extreme := high
-                retrace_extreme_bar := bar_index
-                
-                bos_line := line.new(bos_level_bar, bos_level, bar_index, bos_level, color=color_bear, width=1, style=line.style_solid)
-                bos_line_active := true
-        
-        else
-            if high > retrace_extreme
-                retrace_extreme := high
-                retrace_extreme_bar := bar_index
-            
-            if bos_line_active
-                line.set_x2(bos_line, bar_index)
-            if choc_line_active
-                line.set_x2(choc_line, bar_index)
-            
-            // CHECK BOS
-            if close < bos_level
-                label.new(int(math.avg(bos_level_bar, bar_index)), bos_level, "BOS", color=color(na), textcolor=color_bear, style=label.style_label_up, size=size.tiny)
-                
-                // TERMINA linea BOS
-                if bos_line_active
-                    line.set_x2(bos_line, bar_index)
-                bos_line_active := false
-                
-                // TERMINA linea CHOC precedente
-                if choc_line_active
-                    line.set_x2(choc_line, bar_index)
-                choc_line_active := false
-                
-                // CREA LINEA CHOC (massimo più basso) - MA NON ATTIVA (non verrà estesa)
-                choc_level := retrace_extreme
-                choc_level_bar := retrace_extreme_bar
-                choc_line := line.new(choc_level_bar, choc_level, bar_index, choc_level, color=color_bull, width=1, style=line.style_solid)
-                // NON setto choc_line_active := true, così non viene estesa
-                
-                in_retracement := false
-                last_continuation_level := low
-                last_continuation_bar := bar_index
-                bos_level := na
-                bos_level_bar := na
-                retrace_extreme := na
-                retrace_extreme_bar := na
-            
-            // CHECK CHOC
-            else if not na(choc_level) and close > choc_level
-                label.new(int(math.avg(choc_level_bar, bar_index)), choc_level, "CHOC", color=color(na), textcolor=color_bull, style=label.style_label_down, size=size.tiny)
-                
-                // TERMINA linea CHOC - estendi fino a questa candela
-                if choc_line_active
-                    line.set_x2(choc_line, bar_index)
-                choc_line_active := false
-                
-                // Se c'era una linea CHOC non attiva, estendila comunque fino a qui
-                if not na(choc_line)
-                    line.set_x2(choc_line, bar_index)
-                
-                // TERMINA linea BOS
-                if bos_line_active
-                    line.set_x2(bos_line, bar_index)
-                bos_line_active := false
-                
-                trend := 1
-                in_retracement := false
-                last_continuation_level := high
-                last_continuation_bar := bar_index
-                
-                // Nuovo livello CHOC per doppio CHOC
-                choc_level := low
-                choc_level_bar := bar_index
-                choc_line := line.new(bar_index, low, bar_index, low, color=color_bear, width=1, style=line.style_solid)
-                choc_line_active := true
-                
-                bos_level := na
-                bos_level_bar := na
-                retrace_extreme := na
-                retrace_extreme_bar := na
-    
-    // ==========================================================================
-    // TREND LONG
-    // ==========================================================================
-    
-    else if trend == 1
-        
-        if not in_retracement
-            
-            if high > last_continuation_level
-                last_continuation_level := high
-                last_continuation_bar := bar_index
-            else
-                in_retracement := true
-                bos_level := last_continuation_level
-                bos_level_bar := last_continuation_bar
-                retrace_extreme := low
-                retrace_extreme_bar := bar_index
-                
-                bos_line := line.new(bos_level_bar, bos_level, bar_index, bos_level, color=color_bull, width=1, style=line.style_solid)
-                bos_line_active := true
-        
-        else
-            if low < retrace_extreme
-                retrace_extreme := low
-                retrace_extreme_bar := bar_index
-            
-            if bos_line_active
-                line.set_x2(bos_line, bar_index)
-            if choc_line_active
-                line.set_x2(choc_line, bar_index)
-            
-            // CHECK BOS
-            if close > bos_level
-                label.new(int(math.avg(bos_level_bar, bar_index)), bos_level, "BOS", color=color(na), textcolor=color_bull, style=label.style_label_down, size=size.tiny)
-                
-                // TERMINA linea BOS
-                if bos_line_active
-                    line.set_x2(bos_line, bar_index)
-                bos_line_active := false
-                
-                // TERMINA linea CHOC precedente
-                if choc_line_active
-                    line.set_x2(choc_line, bar_index)
-                choc_line_active := false
-                
-                // CREA LINEA CHOC (minimo più alto) - MA NON ATTIVA (non verrà estesa)
-                choc_level := retrace_extreme
-                choc_level_bar := retrace_extreme_bar
-                choc_line := line.new(choc_level_bar, choc_level, bar_index, choc_level, color=color_bear, width=1, style=line.style_solid)
-                // NON setto choc_line_active := true, così non viene estesa
-                
-                in_retracement := false
-                last_continuation_level := high
-                last_continuation_bar := bar_index
-                bos_level := na
-                bos_level_bar := na
-                retrace_extreme := na
-                retrace_extreme_bar := na
-            
-            // CHECK CHOC
-            else if not na(choc_level) and close < choc_level
-                label.new(int(math.avg(choc_level_bar, bar_index)), choc_level, "CHOC", color=color(na), textcolor=color_bear, style=label.style_label_up, size=size.tiny)
-                
-                // TERMINA linea CHOC - estendi fino a questa candela
-                if choc_line_active
-                    line.set_x2(choc_line, bar_index)
-                choc_line_active := false
-                
-                // Se c'era una linea CHOC non attiva, estendila comunque fino a qui
-                if not na(choc_line)
-                    line.set_x2(choc_line, bar_index)
-                
-                // TERMINA linea BOS
-                if bos_line_active
-                    line.set_x2(bos_line, bar_index)
-                bos_line_active := false
-                
-                trend := -1
-                in_retracement := false
-                last_continuation_level := low
-                last_continuation_bar := bar_index
-                
-                // Nuovo livello CHOC per doppio CHOC
-                choc_level := high
-                choc_level_bar := bar_index
-                choc_line := line.new(bar_index, high, bar_index, high, color=color_bull, width=1, style=line.style_solid)
-                choc_line_active := true
-                
-                bos_level := na
-                bos_level_bar := na
-                retrace_extreme := na
-                retrace_extreme_bar := na
+cond1 = count > 10 
 
-// ══════════════════════════════════════════════════════════════════════════════
-// BACKGROUND
-// ══════════════════════════════════════════════════════════════════════════════
+//HIGHEST/LOWEST CALCULATIONS
+highest = cond1 ? ta.highest(bar_index - nz(l_index)) : 1
+h_bar = cond1 ? ta.highestbars(bar_index - nz(l_index)) : 1
 
-bgcolor(trend == 1 ? color.new(color_bull, 90) : trend == -1 ? color.new(color_bear, 90) : na)
+lowest = cond1 ? ta.lowest(bar_index - nz(h_index)) : 1
+l_bar = cond1 ? ta.lowestbars(bar_index - nz(h_index)) : 1
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ALERTS
-// ══════════════════════════════════════════════════════════════════════════════
+//TREND TRACKING
+var trend = 0
 
-alertcondition(trend == -1 and trend[1] == 1, "CHOC Short", "Trend changed to SHORT")
-alertcondition(trend == 1 and trend[1] == -1, "CHOC Long", "Trend changed to LONG")
+if ta.crossover(close, hi) or (ta.crossover(close, hi1) and lc)
+    trend := 1
+
+if ta.crossunder(close, lo) or (ta.crossunder(close, lo1) and sc)
+    trend := -1
+
+//LINE UPDATES
+if a1  
+    line.set_x2(l1, bar_index)
+
+if a3
+    line.set_x2(l3, bar_index)
+
+//BULLISH STRUCTURE
+if h_cond and onel 
+    a1 := true 
+    onel := false 
+    hi := high[1]
+    h_index := bar_index - 1 
+    l1 := line.new(x1=bar_index - 1, x2=bar_index, y1=high[1], y2=high[1], color=upcol)
+
+if ta.crossover(close, hi) 
+    a1 := false
+    onel := true 
+    sc := true 
+    lo1 := lowest
+    h_ind := bar_index + l_bar
+    l2 := line.new(x1=bar_index + l_bar, x2=bar_index, y1=lowest, y2=lowest, color=locol)
+    if show_labels
+        label.new(int(math.avg(h_index, bar_index)), hi, 'BOS', color=color(na), textcolor=upcol, style=label.style_label_down, size=size.tiny)
+
+if ta.crossunder(close, lo1) and sc 
+    sc := false 
+    ones := true 
+    line.set_x2(l2, bar_index)
+    if show_labels
+        label.new(int(math.avg(h_ind, bar_index)), lo1, 'CHOC', color=color(na), textcolor=locol, style=label.style_label_up, size=size.tiny)
+
+//BEARISH STRUCTURE
+if l_cond and ones 
+    ones := false 
+    a3 := true 
+    lo := low[1]
+    l_index := bar_index - 1
+    l3 := line.new(x1=bar_index - 1, x2=bar_index, y1=low[1], y2=low[1], color=locol)
+
+if ta.crossunder(close, lo) 
+    a3 := false
+    ones := true 
+    hi1 := highest
+    lc := true 
+    l_ind := bar_index + h_bar
+    l4 := line.new(x1=bar_index + h_bar, x2=bar_index, y1=highest, y2=highest, color=upcol)
+    if show_labels
+        label.new(int(math.avg(l_index, bar_index)), lo, 'BOS', color=color(na), textcolor=locol, style=label.style_label_up, size=size.tiny)
+
+if ta.crossover(close, hi1) and lc
+    lc := false 
+    onel := true 
+    line.set_x2(l4, bar_index)
+    if show_labels
+        label.new(int(math.avg(l_ind, bar_index)), hi1, 'CHOC', color=color(na), textcolor=upcol, style=label.style_label_down, size=size.tiny)
+
+//BACKGROUND COLOR
+bgcolor(show_bg and trend == 1 ? color.new(upcol, 90) : show_bg and trend == -1 ? color.new(locol, 90) : na)
+
+//ALERT CONDITIONS
+alertcondition(ta.crossover(close, hi) or ta.crossunder(close, lo), 'BOS Alert')
+alertcondition((ta.crossunder(close, lo1) and sc) or (ta.crossover(close, hi1) and lc), 'CHOC Alert')
