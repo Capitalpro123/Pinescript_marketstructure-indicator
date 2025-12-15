@@ -1,11 +1,8 @@
 1.0 classic indicator from photon trading, market structure with wicks and retracement
-
+1.1 fixed photon trading classic indicator from bug of creation by iz algo in septber 2024, with wrong coch lines
 =================
 
 2.0 trend indicator designed by me, rules : trend countination candele body stessa direzione, servono 2 candele per startare il ritracciamento
--
-2.1 rilasciata il 14/12/25, riscritto il codice da 0 all 100%, risolvendo i bug creati da iz algo alla scrittura iniziale a settembre 2024, del continuamento delle linee coch, ora sia bos che coch, funzionano perfettamente, e finiscono ai punti corretti
-questa versione 2.1, verrà usata per il multi timeframe, 
 -
 ================
 
