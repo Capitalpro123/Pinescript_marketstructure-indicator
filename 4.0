@@ -124,10 +124,59 @@ if ta.crossover(close, massimo_precedente) and linea_completata_basso
 bgcolor(mostra_sfondo and trend == 1 ? color.new(colore_rialzista, 90) : mostra_sfondo and trend == -1 ? color.new(colore_ribassista, 90) : na)
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// BOX STATO - LOGICA FINALE CORRETTA
+// LOGICA IMPULSO/RITRACCIAMENTO - LINEA ULTIMO RITRACCIAMENTO
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Determina timeframe corrente e codici
+var float linea_ritracciamento = na
+var bool ritracciamento_attivo = false
+var int barra_inizio_ritracciamento = na
+
+// Reset ritracciamento quando cambia trend
+var int trend_precedente = 0
+if trend != trend_precedente
+    ritracciamento_attivo := false
+    linea_ritracciamento := na
+    barra_inizio_ritracciamento := na
+trend_precedente := trend
+
+// LOGICA SHORT
+if trend == -1
+    if not ritracciamento_attivo
+        // Siamo in impulso, controlliamo se inizia ritracciamento
+        // Ritracciamento inizia quando la candela NON rompe il low precedente
+        if low >= low[1]
+            linea_ritracciamento := low[1]  // il low che non è stato rotto
+            barra_inizio_ritracciamento := bar_index - 1
+            ritracciamento_attivo := true
+    else
+        // Siamo in ritracciamento, controlliamo se finisce
+        // Finisce quando il close chiude SOTTO la linea di ritracciamento
+        if close < linea_ritracciamento
+            ritracciamento_attivo := false
+            linea_ritracciamento := na
+            barra_inizio_ritracciamento := na
+
+// LOGICA LONG
+if trend == 1
+    if not ritracciamento_attivo
+        // Siamo in impulso, controlliamo se inizia ritracciamento
+        // Ritracciamento inizia quando la candela NON rompe il high precedente
+        if high <= high[1]
+            linea_ritracciamento := high[1]  // il high che non è stato rotto
+            barra_inizio_ritracciamento := bar_index - 1
+            ritracciamento_attivo := true
+    else
+        // Siamo in ritracciamento, controlliamo se finisce
+        // Finisce quando il close chiude SOPRA la linea di ritracciamento
+        if close > linea_ritracciamento
+            ritracciamento_attivo := false
+            linea_ritracciamento := na
+            barra_inizio_ritracciamento := na
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOX STATO - CODICI TIMEFRAME
+// ═══════════════════════════════════════════════════════════════════════════════
+
 nome_timeframe = ""
 codice_long_direzionale = ""
 codice_long_ritracciamento = ""
@@ -135,25 +184,25 @@ codice_short_direzionale = ""
 codice_short_ritracciamento = ""
 
 if timeframe.period == "240"
-    nome_timeframe := "H4"
+    nome_timeframe := "h4"
     codice_long_direzionale := "A1"
     codice_long_ritracciamento := "A2"
     codice_short_direzionale := "B1"
     codice_short_ritracciamento := "B2"
 else if timeframe.period == "60"
-    nome_timeframe := "H1"
+    nome_timeframe := "h1"
     codice_long_direzionale := "C1"
     codice_long_ritracciamento := "C2"
     codice_short_direzionale := "D1"
     codice_short_ritracciamento := "D2"
 else if timeframe.period == "15"
-    nome_timeframe := "M15"
+    nome_timeframe := "m15"
     codice_long_direzionale := "E1"
     codice_long_ritracciamento := "E2"
     codice_short_direzionale := "F1"
     codice_short_ritracciamento := "F2"
 else if timeframe.period == "5"
-    nome_timeframe := "M5"
+    nome_timeframe := "m5"
     codice_long_direzionale := "G1"
     codice_long_ritracciamento := "G2"
     codice_short_direzionale := "H1"
@@ -165,86 +214,55 @@ else
     codice_short_direzionale := "B1"
     codice_short_ritracciamento := "B2"
 
-// LOGICA FINALE:
-// trend = 1 (background verde) = struttura long
-// trend = -1 (background rosso) = struttura short
-// massimo = ultimo massimo rotto (linea verde in alto)
-// minimo = ultimo minimo rotto (linea rossa in basso)
-
+// DETERMINA CODICE FINALE
 codice_finale = ""
 stato_finale = ""
 colore_box = color.gray
-spiegazione = ""
 
-prezzo_corrente = close
-
-// STRUTTURA LONG (background verde)
 if trend == 1
-    if not na(massimo) and prezzo_corrente < massimo
-        // Prezzo sotto ultimo massimo NON rotto = RITRACCIAMENTO LONG
+    if ritracciamento_attivo
         codice_finale := codice_long_ritracciamento
         stato_finale := "long ritracciamento"
         colore_box := color.new(colore_rialzista, 50)
-        spiegazione := "background verde + prezzo sotto massimo NON ancora rotto"
     else
-        // Prezzo sopra o ha rotto massimo = DIREZIONALE LONG
         codice_finale := codice_long_direzionale
         stato_finale := "long direzionale"
         colore_box := colore_rialzista
-        spiegazione := "background verde + prezzo rompe o sopra massimo"
 
-// STRUTTURA SHORT (background rosso)
 else if trend == -1
-    if not na(minimo) and prezzo_corrente > minimo
-        // Prezzo sopra ultimo minimo NON rotto = RITRACCIAMENTO SHORT
+    if ritracciamento_attivo
         codice_finale := codice_short_ritracciamento
         stato_finale := "short ritracciamento"
         colore_box := color.new(colore_ribassista, 50)
-        spiegazione := "background rosso + prezzo sopra minimo NON ancora rotto"
     else
-        // Prezzo sotto o ha rotto minimo = DIREZIONALE SHORT
         codice_finale := codice_short_direzionale
         stato_finale := "short direzionale"
         colore_box := colore_ribassista
-        spiegazione := "background rosso + prezzo rompe o sotto minimo"
 
-// NEUTRALE
 else
-    codice_finale := "N/A"
+    codice_finale := "n/a"
     stato_finale := "neutrale"
     colore_box := color.gray
-    spiegazione := "nessun trend attivo"
 
-// Debug dettagliato
-testo_background = trend == 1 ? "verde (long)" : trend == -1 ? "rosso (short)" : "neutro"
-valore_massimo = not na(massimo) ? str.tostring(massimo, "#.##") : "N/A"
-valore_minimo = not na(minimo) ? str.tostring(minimo, "#.##") : "N/A"
-valore_prezzo = str.tostring(prezzo_corrente, "#.##")
-testo_debug = "background: " + testo_background + " | prezzo: " + valore_prezzo + " | massimo: " + valore_massimo + " | minimo: " + valore_minimo
+// Debug
+linea_ritr_str = na(linea_ritracciamento) ? "na" : str.tostring(linea_ritracciamento, "#.#####")
+testo_debug = "trend: " + str.tostring(trend) + " | ritr_attivo: " + str.tostring(ritracciamento_attivo) + " | linea_ritr: " + linea_ritr_str
 
 // BOX
 if mostra_box and barstate.islast
-    var table tabella = table.new(position.top_right, 2, 5, border_width=2)
+    var table tabella = table.new(position.top_right, 2, 4, border_width=2)
     
-    // Timeframe
     table.cell(tabella, 0, 0, "timeframe", text_color=color.white, bgcolor=color.gray, text_size=size.small)
     table.cell(tabella, 1, 0, nome_timeframe, text_color=color.white, bgcolor=color.gray, text_size=size.small)
     
-    // Stato
     table.cell(tabella, 0, 1, "stato", text_color=color.white, bgcolor=color.gray, text_size=size.small)
     table.cell(tabella, 1, 1, stato_finale, text_color=color.white, bgcolor=colore_box, text_size=size.small)
     
-    // Codice
     table.cell(tabella, 0, 2, "codice", text_color=color.white, bgcolor=color.gray, text_size=size.small)
     table.cell(tabella, 1, 2, codice_finale, text_color=color.white, bgcolor=colore_box, text_size=size.large)
     
-    // Debug
     table.cell(tabella, 0, 3, "debug", text_color=color.white, bgcolor=color.gray, text_size=size.tiny)
     table.cell(tabella, 1, 3, testo_debug, text_color=color.white, bgcolor=color.new(color.blue, 70), text_size=size.tiny)
-    
-    // Spiegazione
-    table.cell(tabella, 0, 4, "logica", text_color=color.white, bgcolor=color.gray, text_size=size.tiny)
-    table.cell(tabella, 1, 4, spiegazione, text_color=color.white, bgcolor=color.new(color.navy, 70), text_size=size.tiny)
 
 //ALERT
 alertcondition(ta.crossover(close, massimo) or ta.crossunder(close, minimo), 'alert bos')
