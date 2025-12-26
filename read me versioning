@@ -15,4 +15,5 @@
 4.2 added automation for listing all the structure status inside the sessions.
 4.3 added drawing the session + ticks label
 4.4 added date and hour at the beggining of the box of the sessions
+4.5 fixed position of the date hour write + added status for candle 0800/1200 h4, and 14,15,16 for h1
 =========
