@@ -17,4 +17,6 @@
 4.4 added date and hour at the beggining of the box of the sessions
 4.5 fixed position of the date hour write + added status for candle 0800/1200 h4, and 14,15,16 for h1
 4.6 added tracking for pre session candles m15 and m5
+4.7 ?
+4.8 no change in logic, just cleaned in asci section + all variables in english
 =========
