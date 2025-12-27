@@ -1,0 +1,541 @@
+//@version=6
+indicator("Market Structure Indicator", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+//IMPOSTAZIONI STRUTTURA
+colore_rialzista = input.color(color.green, "Colore Rialzista", group="Impostazioni Struttura")
+colore_ribassista = input.color(color.red, "Colore Ribassista", group="Impostazioni Struttura")
+mostra_etichette = input.bool(true, "Mostra Etichette BOS/CHOC", group="Impostazioni Struttura")
+mostra_sfondo = input.bool(true, "Mostra Colore Sfondo", group="Impostazioni Struttura")
+mostra_box = input.bool(true, "Mostra Box Stato", group="Impostazioni Struttura")
+
+//IMPOSTAZIONI SESSIONE
+sessione_inizio = input.int(1530, "Inizio Sessione (HHMM)", group="Impostazioni Sessione")
+sessione_fine = input.int(1800, "Fine Sessione (HHMM)", group="Impostazioni Sessione")
+fuso_orario = input.string("Europe/Rome", "Fuso Orario", group="Impostazioni Sessione")
+mostra_box_sessione = input.bool(true, "Mostra Box Sessione", group="Impostazioni Sessione")
+colore_box_sessione = input.color(color.new(#9C27B0, 85), "Colore Box Sessione", group="Impostazioni Sessione")
+distanza_label_ticks = input.float(10, "Distanza Label Ticks (%)", minval=5, maxval=50, step=1, group="Impostazioni Sessione")
+
+//IMPOSTAZIONI CANDELE H4
+candele_h4_opzione = input.string("08:00 + 12:00", "Candele H4", options=["08:00 + 12:00", "11:00 + 15:00"], group="Candele H4")
+
+//IMPOSTAZIONI CANDELE H1 (fisso 14:00, 15:00, 16:00)
+
+//RILEVAMENTO PIVOT
+pivot_alto = ta.pivothigh(1,1) 
+pivot_basso = ta.pivotlow(1,1)
+
+condizione_alto = not na(pivot_alto)
+condizione_basso = not na(pivot_basso)
+
+//VARIABILI STRUTTURA
+var float massimo = na 
+var float minimo = na 
+var float massimo_precedente = na 
+var float minimo_precedente = na 
+
+var bool uno_basso = true
+var bool uno_alto = true 
+
+var int indice_massimo = na 
+var int indice_minimo = na 
+var int indice_mass = na 
+var int indice_mini = na 
+
+var line linea_1 = na 
+var line linea_2 = na 
+var line linea_3 = na 
+var line linea_4 = na 
+
+var bool attiva_1 = false 
+var bool attiva_3 = false 
+
+var bool linea_completata_basso = false 
+var bool linea_completata_alto = false 
+var int contatore = 0 
+
+//CONTATORE BARRE
+if barstate.isconfirmed
+    contatore := contatore + 1 
+
+condizione_1 = contatore > 10 
+
+//CALCOLI MASSIMI/MINIMI
+massimo_periodo = condizione_1 ? ta.highest(bar_index - nz(indice_minimo)) : 1
+barra_massimo = condizione_1 ? ta.highestbars(bar_index - nz(indice_minimo)) : 1
+
+minimo_periodo = condizione_1 ? ta.lowest(bar_index - nz(indice_massimo)) : 1
+barra_minimo = condizione_1 ? ta.lowestbars(bar_index - nz(indice_massimo)) : 1
+
+//TRACKING TREND - MODIFICATO
+var trend = 0
+
+// Salvo lo stato di linea_completata PRIMA che venga modificato
+var bool linea_completata_alto_pre = false
+var bool linea_completata_basso_pre = false
+linea_completata_alto_pre := linea_completata_alto
+linea_completata_basso_pre := linea_completata_basso
+
+//AGGIORNAMENTO LINEE
+if attiva_1  
+    line.set_x2(linea_1, bar_index)
+
+if attiva_3
+    line.set_x2(linea_3, bar_index)
+
+//STRUTTURA RIALZISTA
+if condizione_alto and uno_basso 
+    attiva_1 := true 
+    uno_basso := false 
+    massimo := high[1]
+    indice_massimo := bar_index - 1 
+    linea_1 := line.new(x1=bar_index - 1, x2=bar_index, y1=high[1], y2=high[1], color=colore_rialzista)
+
+if ta.crossover(close, massimo) 
+    attiva_1 := false
+    uno_basso := true 
+    linea_completata_alto := true 
+    minimo_precedente := minimo_periodo
+    indice_mass := bar_index + barra_minimo
+    linea_2 := line.new(x1=bar_index + barra_minimo, x2=bar_index, y1=minimo_periodo, y2=minimo_periodo, color=colore_ribassista)
+    if mostra_etichette
+        label.new(int(math.avg(indice_massimo, bar_index)), massimo, 'BOS', color=color(na), textcolor=colore_rialzista, style=label.style_label_down, size=size.tiny)
+
+if ta.crossunder(close, minimo_precedente) and linea_completata_alto 
+    linea_completata_alto := false 
+    uno_alto := true 
+    line.set_x2(linea_2, bar_index)
+    if mostra_etichette
+        label.new(int(math.avg(indice_mass, bar_index)), minimo_precedente, 'CHOC', color=color(na), textcolor=colore_ribassista, style=label.style_label_up, size=size.tiny)
+
+//STRUTTURA RIBASSISTA
+if condizione_basso and uno_alto 
+    uno_alto := false 
+    attiva_3 := true 
+    minimo := low[1]
+    indice_minimo := bar_index - 1
+    linea_3 := line.new(x1=bar_index - 1, x2=bar_index, y1=low[1], y2=low[1], color=colore_ribassista)
+
+if ta.crossunder(close, minimo) 
+    attiva_3 := false
+    uno_alto := true 
+    massimo_precedente := massimo_periodo
+    linea_completata_basso := true 
+    indice_mini := bar_index + barra_massimo
+    linea_4 := line.new(x1=bar_index + barra_massimo, x2=bar_index, y1=massimo_periodo, y2=massimo_periodo, color=colore_rialzista)
+    if mostra_etichette
+        label.new(int(math.avg(indice_minimo, bar_index)), minimo, 'BOS', color=color(na), textcolor=colore_ribassista, style=label.style_label_up, size=size.tiny)
+
+if ta.crossover(close, massimo_precedente) and linea_completata_basso
+    linea_completata_basso := false 
+    uno_basso := true 
+    line.set_x2(linea_4, bar_index)
+    if mostra_etichette
+        label.new(int(math.avg(indice_mini, bar_index)), massimo_precedente, 'CHOC', color=color(na), textcolor=colore_rialzista, style=label.style_label_down, size=size.tiny)
+
+// TRACKING TREND - usa i valori PRE per il CHOC
+if ta.crossover(close, massimo) or (ta.crossover(close, massimo_precedente) and linea_completata_basso_pre)
+    trend := 1
+
+if ta.crossunder(close, minimo) or (ta.crossunder(close, minimo_precedente) and linea_completata_alto_pre)
+    trend := -1
+
+//COLORE SFONDO
+bgcolor(mostra_sfondo and trend == 1 ? color.new(colore_rialzista, 90) : mostra_sfondo and trend == -1 ? color.new(colore_ribassista, 90) : na)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGICA IMPULSO/RITRACCIAMENTO - LINEA ULTIMO RITRACCIAMENTO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var float linea_ritracciamento = na
+var bool ritracciamento_attivo = false
+var int barra_inizio_ritracciamento = na
+
+// Reset ritracciamento quando cambia trend
+var int trend_precedente = 0
+if trend != trend_precedente
+    ritracciamento_attivo := false
+    linea_ritracciamento := na
+    barra_inizio_ritracciamento := na
+trend_precedente := trend
+
+// LOGICA SHORT
+if trend == -1
+    if not ritracciamento_attivo
+        if low >= low[1]
+            linea_ritracciamento := low[1]
+            barra_inizio_ritracciamento := bar_index - 1
+            ritracciamento_attivo := true
+    else
+        if close < linea_ritracciamento
+            ritracciamento_attivo := false
+            linea_ritracciamento := na
+            barra_inizio_ritracciamento := na
+
+// LOGICA LONG
+if trend == 1
+    if not ritracciamento_attivo
+        if high <= high[1]
+            linea_ritracciamento := high[1]
+            barra_inizio_ritracciamento := bar_index - 1
+            ritracciamento_attivo := true
+    else
+        if close > linea_ritracciamento
+            ritracciamento_attivo := false
+            linea_ritracciamento := na
+            barra_inizio_ritracciamento := na
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SESSIONE - RILEVAMENTO E TRACKING STATI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Calcolo ora corrente nel fuso orario specificato
+ora_corrente = hour(time, fuso_orario)
+minuto_corrente = minute(time, fuso_orario)
+ora_hhmm = ora_corrente * 100 + minuto_corrente
+
+// Verifica se siamo in sessione
+in_sessione = ora_hhmm >= sessione_inizio and ora_hhmm < sessione_fine
+in_sessione_pre = ora_hhmm[1] >= sessione_inizio and ora_hhmm[1] < sessione_fine
+
+// Inizio e fine sessione
+inizio_sessione = in_sessione and not in_sessione_pre
+fine_sessione = not in_sessione and in_sessione_pre
+
+// Data della sessione corrente
+giorno_sessione = dayofmonth(time, fuso_orario)
+mese_sessione = month(time, fuso_orario)
+anno_sessione = year(time, fuso_orario)
+
+// Tracking stati durante la sessione
+var string stati_sessione = ""
+var string ultimo_codice_aggiunto = ""
+var int giorno_sessione_tracking = 0
+var int mese_sessione_tracking = 0
+var int anno_sessione_tracking = 0
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOX SESSIONE A GRAFICO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var box box_sessione = na
+var label label_ticks = na
+var int bar_inizio_sessione = na
+var float sessione_high = na
+var float sessione_low = na
+
+// Mostra box sessione solo su TF inferiori (non H4 e H1)
+mostra_box_sessione_tf = mostra_box_sessione and timeframe.period != "240" and timeframe.period != "60"
+
+// Inizio nuova sessione
+if inizio_sessione and mostra_box_sessione_tf
+    bar_inizio_sessione := bar_index
+    sessione_high := high
+    sessione_low := low
+    box_sessione := box.new(bar_index, high, bar_index, low, bgcolor=colore_box_sessione, border_color=color.new(colore_box_sessione, 0), border_width=1)
+    label_ticks := label.new(bar_index, low, "", style=label.style_label_up, textcolor=color.new(colore_box_sessione, 0), color=color(na), size=size.normal)
+
+// Variabili per label data/ora
+var label label_data_ora = na
+var line linea_verticale = na
+
+// Aggiorna durante sessione
+if in_sessione and mostra_box_sessione_tf and not na(box_sessione)
+    sessione_high := math.max(sessione_high, high)
+    sessione_low := math.min(sessione_low, low)
+    box.set_top(box_sessione, sessione_high)
+    box.set_bottom(box_sessione, sessione_low)
+    box.set_right(box_sessione, bar_index)
+    
+    // Calcola ticks
+    ticks_range = (sessione_high - sessione_low) / syminfo.mintick
+    distanza = (sessione_high - sessione_low) * (distanza_label_ticks / 100)
+    distanza_data = distanza * 2.5  // Più sotto per la data/ora
+    
+    // Aggiorna label range
+    label.set_x(label_ticks, int(math.avg(bar_inizio_sessione, bar_index)))
+    label.set_y(label_ticks, sessione_low - distanza)
+    label.set_text(label_ticks, "Range: " + str.tostring(ticks_range, "#.##"))
+    
+    // Crea/aggiorna label data/ora - parte dalla linea verticale
+    anno_str = str.tostring(anno_sessione_tracking)
+    mese_str = str.tostring(mese_sessione_tracking, "00")
+    giorno_str = str.tostring(giorno_sessione_tracking, "00")
+    data_ora_str = anno_str + " " + mese_str + " " + giorno_str + " 15:30:00"
+    
+    if na(label_data_ora)
+        label_data_ora := label.new(bar_inizio_sessione, sessione_low - distanza_data, data_ora_str, style=label.style_label_right, textcolor=color.new(colore_box_sessione, 0), color=color(na), size=size.small)
+    else
+        label.set_x(label_data_ora, bar_inizio_sessione)
+        label.set_y(label_data_ora, sessione_low - distanza_data)
+        label.set_text(label_data_ora, data_ora_str)
+    
+    // Linea verticale dal box verso il basso
+    if na(linea_verticale)
+        linea_verticale := line.new(bar_inizio_sessione, sessione_low, bar_inizio_sessione, sessione_low - distanza_data, color=color.new(colore_box_sessione, 0), width=1, style=line.style_solid)
+    else
+        line.set_y1(linea_verticale, sessione_low)
+        line.set_y2(linea_verticale, sessione_low - distanza_data)
+
+// Fine sessione - finalizza
+if fine_sessione and mostra_box_sessione_tf and not na(box_sessione)
+    box_sessione := na
+    label_ticks := na
+    label_data_ora := na
+    linea_verticale := na
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOX STATO - CODICI TIMEFRAME
+// ═══════════════════════════════════════════════════════════════════════════════
+
+nome_timeframe = ""
+codice_long_direzionale = ""
+codice_long_ritracciamento = ""
+codice_short_direzionale = ""
+codice_short_ritracciamento = ""
+
+if timeframe.period == "240"
+    nome_timeframe := "h4"
+    codice_long_direzionale := "A1"
+    codice_long_ritracciamento := "A2"
+    codice_short_direzionale := "B1"
+    codice_short_ritracciamento := "B2"
+else if timeframe.period == "60"
+    nome_timeframe := "h1"
+    codice_long_direzionale := "C1"
+    codice_long_ritracciamento := "C2"
+    codice_short_direzionale := "D1"
+    codice_short_ritracciamento := "D2"
+else if timeframe.period == "15"
+    nome_timeframe := "m15"
+    codice_long_direzionale := "E1"
+    codice_long_ritracciamento := "E2"
+    codice_short_direzionale := "F1"
+    codice_short_ritracciamento := "F2"
+else if timeframe.period == "5"
+    nome_timeframe := "m5"
+    codice_long_direzionale := "G1"
+    codice_long_ritracciamento := "G2"
+    codice_short_direzionale := "H1"
+    codice_short_ritracciamento := "H2"
+else
+    nome_timeframe := timeframe.period
+    codice_long_direzionale := "A1"
+    codice_long_ritracciamento := "A2"
+    codice_short_direzionale := "B1"
+    codice_short_ritracciamento := "B2"
+
+// DETERMINA CODICE FINALE
+codice_finale = ""
+stato_finale = ""
+colore_box = color.gray
+
+if trend == 1
+    if ritracciamento_attivo
+        codice_finale := codice_long_ritracciamento
+        stato_finale := "long ritracciamento"
+        colore_box := color.new(colore_rialzista, 50)
+    else
+        codice_finale := codice_long_direzionale
+        stato_finale := "long direzionale"
+        colore_box := colore_rialzista
+
+else if trend == -1
+    if ritracciamento_attivo
+        codice_finale := codice_short_ritracciamento
+        stato_finale := "short ritracciamento"
+        colore_box := color.new(colore_ribassista, 50)
+    else
+        codice_finale := codice_short_direzionale
+        stato_finale := "short direzionale"
+        colore_box := colore_ribassista
+
+else
+    codice_finale := "n/a"
+    stato_finale := "neutrale"
+    colore_box := color.gray
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DETECTION CANDELE SPECIFICHE H4 E H1
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Variabili per tracking giornaliero candele
+var string h4_status_1 = ""
+var string h4_status_2 = ""
+var string h1_status_14 = ""
+var string h1_status_15 = ""
+var string h1_status_16 = ""
+var int ultimo_giorno_candele = 0
+
+// Reset giornaliero
+giorno_corrente = dayofmonth(time, fuso_orario)
+if giorno_corrente != ultimo_giorno_candele
+    h4_status_1 := ""
+    h4_status_2 := ""
+    h1_status_14 := ""
+    h1_status_15 := ""
+    h1_status_16 := ""
+    ultimo_giorno_candele := giorno_corrente
+
+// Determina ore candele H4 in base all'opzione selezionata
+h4_ora_1 = candele_h4_opzione == "08:00 + 12:00" ? 8 : 11
+h4_ora_2 = candele_h4_opzione == "08:00 + 12:00" ? 12 : 15
+
+// Detection H4 (solo su TF H4)
+if timeframe.period == "240"
+    if ora_corrente == h4_ora_1 and minuto_corrente == 0
+        h4_status_1 := codice_finale
+    if ora_corrente == h4_ora_2 and minuto_corrente == 0
+        h4_status_2 := codice_finale
+
+// Detection H1 (solo su TF H1)
+if timeframe.period == "60"
+    if ora_corrente == 14 and minuto_corrente == 0
+        h1_status_14 := codice_finale
+    if ora_corrente == 15 and minuto_corrente == 0
+        h1_status_15 := codice_finale
+    if ora_corrente == 16 and minuto_corrente == 0
+        h1_status_16 := codice_finale
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DETECTION CANDELE PRE-SESSIONE M15 E M5
+// ═══════════════════════════════════════════════════════════════════════════════
+
+var string m15_pre_status = ""
+var string m5_pre_status = ""
+
+// Calcolo orario candela pre-sessione
+// Sessione inizia alle 15:30 (1530) -> M15 pre = 15:15, M5 pre = 15:25
+sessione_ora = math.floor(sessione_inizio / 100)
+sessione_min = sessione_inizio % 100
+
+// M15: candela 15 minuti prima
+m15_pre_ora = sessione_min >= 15 ? sessione_ora : sessione_ora - 1
+m15_pre_min = sessione_min >= 15 ? sessione_min - 15 : 60 + sessione_min - 15
+
+// M5: candela 5 minuti prima  
+m5_pre_ora = sessione_min >= 5 ? sessione_ora : sessione_ora - 1
+m5_pre_min = sessione_min >= 5 ? sessione_min - 5 : 60 + sessione_min - 5
+
+// Detection M15 pre-sessione (solo su TF M15)
+if timeframe.period == "15"
+    if ora_corrente == m15_pre_ora and minuto_corrente == m15_pre_min
+        m15_pre_status := codice_finale
+
+// Detection M5 pre-sessione (solo su TF M5)
+if timeframe.period == "5"
+    if ora_corrente == m5_pre_ora and minuto_corrente == m5_pre_min
+        m5_pre_status := codice_finale
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRACKING STATI SESSIONE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Reset stati se cambia giorno
+if giorno_sessione != giorno_sessione_tracking or mese_sessione != mese_sessione_tracking or anno_sessione != anno_sessione_tracking
+    stati_sessione := ""
+    ultimo_codice_aggiunto := ""
+    giorno_sessione_tracking := giorno_sessione
+    mese_sessione_tracking := mese_sessione
+    anno_sessione_tracking := anno_sessione
+
+// Aggiungi codice se siamo in sessione e il codice è cambiato e non è già presente
+if in_sessione and codice_finale != ultimo_codice_aggiunto and codice_finale != "n/a"
+    // Controlla se il codice è già presente nella lista
+    codice_gia_presente = str.contains(stati_sessione, codice_finale)
+    if not codice_gia_presente
+        if stati_sessione == ""
+            stati_sessione := codice_finale
+        else
+            stati_sessione := stati_sessione + "+" + codice_finale
+    ultimo_codice_aggiunto := codice_finale
+
+// Info
+linea_ritr_str = na(linea_ritracciamento) ? "na" : str.tostring(linea_ritracciamento, "#.#####")
+testo_info = "trend: " + str.tostring(trend) + " | ritr: " + str.tostring(ritracciamento_attivo) + " | linea: " + linea_ritr_str
+
+// Data formattata
+data_sessione_str = str.tostring(giorno_sessione_tracking) + "/" + str.tostring(mese_sessione_tracking) + "/" + str.tostring(anno_sessione_tracking)
+
+// Testo per candele H4 e H1 con data
+h4_candele_str = data_sessione_str + " | " + str.tostring(h4_ora_1, "00") + ":00=" + (h4_status_1 != "" ? h4_status_1 : "?") + " | " + str.tostring(h4_ora_2, "00") + ":00=" + (h4_status_2 != "" ? h4_status_2 : "?")
+h1_candele_str = data_sessione_str + " | 14=" + (h1_status_14 != "" ? h1_status_14 : "?") + " | 15=" + (h1_status_15 != "" ? h1_status_15 : "?") + " | 16=" + (h1_status_16 != "" ? h1_status_16 : "?")
+
+// Testo per candele M15 e M5 pre-sessione con data
+m15_pre_str = data_sessione_str + " | " + str.tostring(m15_pre_ora, "00") + ":" + str.tostring(m15_pre_min, "00") + "=" + (m15_pre_status != "" ? m15_pre_status : "?")
+m5_pre_str = data_sessione_str + " | " + str.tostring(m5_pre_ora, "00") + ":" + str.tostring(m5_pre_min, "00") + "=" + (m5_pre_status != "" ? m5_pre_status : "?")
+
+// BOX
+if mostra_box and barstate.islast
+    var table tabella = table.new(position.top_right, 2, 10, border_width=2)
+    
+    // Timeframe
+    table.cell(tabella, 0, 0, "timeframe", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 0, nome_timeframe, text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    
+    // Stato
+    table.cell(tabella, 0, 1, "stato", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 1, stato_finale, text_color=color.white, bgcolor=colore_box, text_size=size.small)
+    
+    // Codice
+    table.cell(tabella, 0, 2, "codice", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 2, codice_finale, text_color=color.white, bgcolor=colore_box, text_size=size.large)
+    
+    // Info
+    table.cell(tabella, 0, 3, "info", text_color=color.white, bgcolor=color.gray, text_size=size.tiny)
+    table.cell(tabella, 1, 3, testo_info, text_color=color.white, bgcolor=color.new(color.blue, 70), text_size=size.tiny)
+    
+    // Giorno riferimento
+    table.cell(tabella, 0, 4, "giorno", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 4, data_sessione_str, text_color=color.white, bgcolor=color.new(color.purple, 50), text_size=size.small)
+    
+    // Stati sessione
+    table.cell(tabella, 0, 5, "stati sessione", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 5, stati_sessione != "" ? stati_sessione : "nessuno", text_color=color.white, bgcolor=color.new(color.purple, 50), text_size=size.small)
+    
+    // Candele H4
+    table.cell(tabella, 0, 6, "H4", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 6, h4_candele_str, text_color=color.white, bgcolor=color.new(color.orange, 50), text_size=size.small)
+    
+    // Candele H1
+    table.cell(tabella, 0, 7, "H1", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 7, h1_candele_str, text_color=color.white, bgcolor=color.new(color.orange, 50), text_size=size.small)
+    
+    // M15 pre-sessione
+    table.cell(tabella, 0, 8, "M15 pre", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 8, m15_pre_str, text_color=color.white, bgcolor=color.new(color.teal, 50), text_size=size.small)
+    
+    // M5 pre-sessione
+    table.cell(tabella, 0, 9, "M5 pre", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(tabella, 1, 9, m5_pre_str, text_color=color.white, bgcolor=color.new(color.teal, 50), text_size=size.small)
+
+//ALERT
+alertcondition(ta.crossover(close, massimo) or ta.crossunder(close, minimo), 'alert bos')
+alertcondition((ta.crossunder(close, minimo_precedente) and linea_completata_alto) or (ta.crossover(close, massimo_precedente) and linea_completata_basso), 'alert choc')
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PINE LOGS - EXPORT DATI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+if barstate.islast
+    if timeframe.period == "240"
+        log.info("{0} | H4: {1}, {2}", 
+                 data_sessione_str, 
+                 h4_status_1 != "" ? h4_status_1 : "?",
+                 h4_status_2 != "" ? h4_status_2 : "?")
+    else if timeframe.period == "60"
+        log.info("{0} | H1: {1}, {2}, {3}", 
+                 data_sessione_str, 
+                 h1_status_14 != "" ? h1_status_14 : "?",
+                 h1_status_15 != "" ? h1_status_15 : "?",
+                 h1_status_16 != "" ? h1_status_16 : "?")
+    else if timeframe.period == "15"
+        log.info("{0} | M15: {1} | {2}", 
+                 data_sessione_str,
+                 m15_pre_status != "" ? m15_pre_status : "?",
+                 stati_sessione != "" ? stati_sessione : "nessuno")
+    else if timeframe.period == "5"
+        log.info("{0} | M5: {1} | {2}", 
+                 data_sessione_str,
+                 m5_pre_status != "" ? m5_pre_status : "?",
+                 stati_sessione != "" ? stati_sessione : "nessuno")
