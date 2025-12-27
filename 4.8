@@ -1,0 +1,547 @@
+//@version=6
+indicator("Market Structure Indicator", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500, max_boxes_count=500)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              STRUCTURE SETTINGS
+//═══════════════════════════════════════════════════════════════════════════════
+
+bullish_color = input.color(color.green, "Bullish Color", group="Structure Settings")
+bearish_color = input.color(color.red, "Bearish Color", group="Structure Settings")
+show_labels = input.bool(true, "Show BOS/CHOC Labels", group="Structure Settings")
+show_background = input.bool(true, "Show Background Color", group="Structure Settings")
+show_info_box = input.bool(true, "Show Info Box", group="Structure Settings")
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              SESSION SETTINGS
+//═══════════════════════════════════════════════════════════════════════════════
+
+session_start = input.int(1530, "Session Start (HHMM)", group="Session Settings")
+session_end = input.int(1800, "Session End (HHMM)", group="Session Settings")
+timezone = input.string("Europe/Rome", "Timezone", group="Session Settings")
+show_session_box = input.bool(true, "Show Session Box", group="Session Settings")
+session_box_color = input.color(color.new(#9C27B0, 85), "Session Box Color", group="Session Settings")
+label_distance_percentage = input.float(10, "Label Distance (%)", minval=5, maxval=50, step=1, group="Session Settings")
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              H4 CANDLE SETTINGS
+//═══════════════════════════════════════════════════════════════════════════════
+
+h4_candles_option = input.string("08:00 + 12:00", "H4 Candles", options=["08:00 + 12:00", "11:00 + 15:00"], group="H4 Candles")
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              PIVOT DETECTION
+//═══════════════════════════════════════════════════════════════════════════════
+
+pivot_high = ta.pivothigh(1,1) 
+pivot_low = ta.pivotlow(1,1)
+
+high_condition = not na(pivot_high)
+low_condition = not na(pivot_low)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              STRUCTURE VARIABLES
+//═══════════════════════════════════════════════════════════════════════════════
+
+var float current_high = na 
+var float current_low = na 
+var float previous_high = na 
+var float previous_low = na 
+
+var bool waiting_for_low = true
+var bool waiting_for_high = true 
+
+var int high_index = na 
+var int low_index = na 
+var int previous_high_index = na 
+var int previous_low_index = na 
+
+var line high_line = na 
+var line low_retracement_line = na 
+var line low_line = na 
+var line high_retracement_line = na 
+
+var bool high_line_active = false 
+var bool low_line_active = false 
+
+var bool low_retracement_complete = false 
+var bool high_retracement_complete = false 
+var int bar_counter = 0 
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              BAR COUNTER
+//═══════════════════════════════════════════════════════════════════════════════
+
+if barstate.isconfirmed
+    bar_counter := bar_counter + 1 
+
+enough_bars = bar_counter > 10 
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              HIGHEST/LOWEST CALCULATIONS
+//═══════════════════════════════════════════════════════════════════════════════
+
+highest_since_low = enough_bars ? ta.highest(bar_index - nz(low_index)) : 1
+highest_bar_offset = enough_bars ? ta.highestbars(bar_index - nz(low_index)) : 1
+
+lowest_since_high = enough_bars ? ta.lowest(bar_index - nz(high_index)) : 1
+lowest_bar_offset = enough_bars ? ta.lowestbars(bar_index - nz(high_index)) : 1
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              TREND TRACKING
+//═══════════════════════════════════════════════════════════════════════════════
+
+var trend = 0
+
+var bool high_retracement_complete_previous = false
+var bool low_retracement_complete_previous = false
+high_retracement_complete_previous := high_retracement_complete
+low_retracement_complete_previous := low_retracement_complete
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              LINE UPDATES
+//═══════════════════════════════════════════════════════════════════════════════
+
+if high_line_active  
+    line.set_x2(high_line, bar_index)
+
+if low_line_active
+    line.set_x2(low_line, bar_index)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              BULLISH STRUCTURE
+//═══════════════════════════════════════════════════════════════════════════════
+
+if high_condition and waiting_for_low 
+    high_line_active := true 
+    waiting_for_low := false 
+    current_high := high[1]
+    high_index := bar_index - 1 
+    high_line := line.new(x1=bar_index - 1, x2=bar_index, y1=high[1], y2=high[1], color=bullish_color)
+
+if ta.crossover(close, current_high) 
+    high_line_active := false
+    waiting_for_low := true 
+    high_retracement_complete := true 
+    previous_low := lowest_since_high
+    previous_high_index := bar_index + lowest_bar_offset
+    low_retracement_line := line.new(x1=bar_index + lowest_bar_offset, x2=bar_index, y1=lowest_since_high, y2=lowest_since_high, color=bearish_color)
+    if show_labels
+        label.new(int(math.avg(high_index, bar_index)), current_high, 'BOS', color=color(na), textcolor=bullish_color, style=label.style_label_down, size=size.tiny)
+
+if ta.crossunder(close, previous_low) and high_retracement_complete 
+    high_retracement_complete := false 
+    waiting_for_high := true 
+    line.set_x2(low_retracement_line, bar_index)
+    if show_labels
+        label.new(int(math.avg(previous_high_index, bar_index)), previous_low, 'CHOC', color=color(na), textcolor=bearish_color, style=label.style_label_up, size=size.tiny)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              BEARISH STRUCTURE
+//═══════════════════════════════════════════════════════════════════════════════
+
+if low_condition and waiting_for_high 
+    waiting_for_high := false 
+    low_line_active := true 
+    current_low := low[1]
+    low_index := bar_index - 1
+    low_line := line.new(x1=bar_index - 1, x2=bar_index, y1=low[1], y2=low[1], color=bearish_color)
+
+if ta.crossunder(close, current_low) 
+    low_line_active := false
+    waiting_for_high := true 
+    previous_high := highest_since_low
+    low_retracement_complete := true 
+    previous_low_index := bar_index + highest_bar_offset
+    high_retracement_line := line.new(x1=bar_index + highest_bar_offset, x2=bar_index, y1=highest_since_low, y2=highest_since_low, color=bullish_color)
+    if show_labels
+        label.new(int(math.avg(low_index, bar_index)), current_low, 'BOS', color=color(na), textcolor=bearish_color, style=label.style_label_up, size=size.tiny)
+
+if ta.crossover(close, previous_high) and low_retracement_complete
+    low_retracement_complete := false 
+    waiting_for_low := true 
+    line.set_x2(high_retracement_line, bar_index)
+    if show_labels
+        label.new(int(math.avg(previous_low_index, bar_index)), previous_high, 'CHOC', color=color(na), textcolor=bullish_color, style=label.style_label_down, size=size.tiny)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              TREND STATE UPDATE
+//═══════════════════════════════════════════════════════════════════════════════
+
+if ta.crossover(close, current_high) or (ta.crossover(close, previous_high) and low_retracement_complete_previous)
+    trend := 1
+
+if ta.crossunder(close, current_low) or (ta.crossunder(close, previous_low) and high_retracement_complete_previous)
+    trend := -1
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              BACKGROUND COLOR
+//═══════════════════════════════════════════════════════════════════════════════
+
+bgcolor(show_background and trend == 1 ? color.new(bullish_color, 90) : show_background and trend == -1 ? color.new(bearish_color, 90) : na)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              IMPULSE/RETRACEMENT LOGIC
+//═══════════════════════════════════════════════════════════════════════════════
+
+var float retracement_line = na
+var bool retracement_active = false
+var int retracement_start_bar = na
+
+var int previous_trend = 0
+if trend != previous_trend
+    retracement_active := false
+    retracement_line := na
+    retracement_start_bar := na
+previous_trend := trend
+
+// SHORT RETRACEMENT LOGIC
+if trend == -1
+    if not retracement_active
+        if low >= low[1]
+            retracement_line := low[1]
+            retracement_start_bar := bar_index - 1
+            retracement_active := true
+    else
+        if close < retracement_line
+            retracement_active := false
+            retracement_line := na
+            retracement_start_bar := na
+
+// LONG RETRACEMENT LOGIC
+if trend == 1
+    if not retracement_active
+        if high <= high[1]
+            retracement_line := high[1]
+            retracement_start_bar := bar_index - 1
+            retracement_active := true
+    else
+        if close > retracement_line
+            retracement_active := false
+            retracement_line := na
+            retracement_start_bar := na
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              SESSION DETECTION
+//═══════════════════════════════════════════════════════════════════════════════
+
+current_hour = hour(time, timezone)
+current_minute = minute(time, timezone)
+current_time_hhmm = current_hour * 100 + current_minute
+
+in_session = current_time_hhmm >= session_start and current_time_hhmm < session_end
+in_session_previous = current_time_hhmm[1] >= session_start and current_time_hhmm[1] < session_end
+
+session_started = in_session and not in_session_previous
+session_ended = not in_session and in_session_previous
+
+session_day = dayofmonth(time, timezone)
+session_month = month(time, timezone)
+session_year = year(time, timezone)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              SESSION STATE TRACKING
+//═══════════════════════════════════════════════════════════════════════════════
+
+var string session_states = ""
+var string last_code_added = ""
+var int tracking_day = 0
+var int tracking_month = 0
+var int tracking_year = 0
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              SESSION BOX VISUALIZATION
+//═══════════════════════════════════════════════════════════════════════════════
+
+var box session_box = na
+var label range_label = na
+var int session_start_bar = na
+var float session_high = na
+var float session_low = na
+
+show_session_box_timeframe = show_session_box and timeframe.period != "240" and timeframe.period != "60"
+
+if session_started and show_session_box_timeframe
+    session_start_bar := bar_index
+    session_high := high
+    session_low := low
+    session_box := box.new(bar_index, high, bar_index, low, bgcolor=session_box_color, border_color=color.new(session_box_color, 0), border_width=1)
+    range_label := label.new(bar_index, low, "", style=label.style_label_up, textcolor=color.new(session_box_color, 0), color=color(na), size=size.normal)
+
+var label datetime_label = na
+var line vertical_line = na
+
+if in_session and show_session_box_timeframe and not na(session_box)
+    session_high := math.max(session_high, high)
+    session_low := math.min(session_low, low)
+    box.set_top(session_box, session_high)
+    box.set_bottom(session_box, session_low)
+    box.set_right(session_box, bar_index)
+    
+    range_ticks = (session_high - session_low) / syminfo.mintick
+    label_distance = (session_high - session_low) * (label_distance_percentage / 100)
+    datetime_distance = label_distance * 2.5
+    
+    label.set_x(range_label, int(math.avg(session_start_bar, bar_index)))
+    label.set_y(range_label, session_low - label_distance)
+    label.set_text(range_label, "Range: " + str.tostring(range_ticks, "#.##"))
+    
+    year_string = str.tostring(tracking_year)
+    month_string = str.tostring(tracking_month, "00")
+    day_string = str.tostring(tracking_day, "00")
+    datetime_string = year_string + " " + month_string + " " + day_string + " 15:30:00"
+    
+    if na(datetime_label)
+        datetime_label := label.new(session_start_bar, session_low - datetime_distance, datetime_string, style=label.style_label_right, textcolor=color.new(session_box_color, 0), color=color(na), size=size.small)
+    else
+        label.set_x(datetime_label, session_start_bar)
+        label.set_y(datetime_label, session_low - datetime_distance)
+        label.set_text(datetime_label, datetime_string)
+    
+    if na(vertical_line)
+        vertical_line := line.new(session_start_bar, session_low, session_start_bar, session_low - datetime_distance, color=color.new(session_box_color, 0), width=1, style=line.style_solid)
+    else
+        line.set_y1(vertical_line, session_low)
+        line.set_y2(vertical_line, session_low - datetime_distance)
+
+if session_ended and show_session_box_timeframe and not na(session_box)
+    session_box := na
+    range_label := na
+    datetime_label := na
+    vertical_line := na
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              TIMEFRAME CODE SYSTEM
+//═══════════════════════════════════════════════════════════════════════════════
+
+timeframe_name = ""
+long_directional_code = ""
+long_retracement_code = ""
+short_directional_code = ""
+short_retracement_code = ""
+
+if timeframe.period == "240"
+    timeframe_name := "h4"
+    long_directional_code := "A1"
+    long_retracement_code := "A2"
+    short_directional_code := "B1"
+    short_retracement_code := "B2"
+else if timeframe.period == "60"
+    timeframe_name := "h1"
+    long_directional_code := "C1"
+    long_retracement_code := "C2"
+    short_directional_code := "D1"
+    short_retracement_code := "D2"
+else if timeframe.period == "15"
+    timeframe_name := "m15"
+    long_directional_code := "E1"
+    long_retracement_code := "E2"
+    short_directional_code := "F1"
+    short_retracement_code := "F2"
+else if timeframe.period == "5"
+    timeframe_name := "m5"
+    long_directional_code := "G1"
+    long_retracement_code := "G2"
+    short_directional_code := "H1"
+    short_retracement_code := "H2"
+else
+    timeframe_name := timeframe.period
+    long_directional_code := "A1"
+    long_retracement_code := "A2"
+    short_directional_code := "B1"
+    short_retracement_code := "B2"
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              FINAL STATE CODE
+//═══════════════════════════════════════════════════════════════════════════════
+
+final_code = ""
+final_state = ""
+box_color = color.gray
+
+if trend == 1
+    if retracement_active
+        final_code := long_retracement_code
+        final_state := "long retracement"
+        box_color := color.new(bullish_color, 50)
+    else
+        final_code := long_directional_code
+        final_state := "long directional"
+        box_color := bullish_color
+
+else if trend == -1
+    if retracement_active
+        final_code := short_retracement_code
+        final_state := "short retracement"
+        box_color := color.new(bearish_color, 50)
+    else
+        final_code := short_directional_code
+        final_state := "short directional"
+        box_color := bearish_color
+
+else
+    final_code := "n/a"
+    final_state := "neutral"
+    box_color := color.gray
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              H4 AND H1 CANDLE DETECTION
+//═══════════════════════════════════════════════════════════════════════════════
+
+var string h4_status_1 = ""
+var string h4_status_2 = ""
+var string h1_status_14 = ""
+var string h1_status_15 = ""
+var string h1_status_16 = ""
+var int last_candle_day = 0
+
+current_day = dayofmonth(time, timezone)
+if current_day != last_candle_day
+    h4_status_1 := ""
+    h4_status_2 := ""
+    h1_status_14 := ""
+    h1_status_15 := ""
+    h1_status_16 := ""
+    last_candle_day := current_day
+
+h4_hour_1 = h4_candles_option == "08:00 + 12:00" ? 8 : 11
+h4_hour_2 = h4_candles_option == "08:00 + 12:00" ? 12 : 15
+
+if timeframe.period == "240"
+    if current_hour == h4_hour_1 and current_minute == 0
+        h4_status_1 := final_code
+    if current_hour == h4_hour_2 and current_minute == 0
+        h4_status_2 := final_code
+
+if timeframe.period == "60"
+    if current_hour == 14 and current_minute == 0
+        h1_status_14 := final_code
+    if current_hour == 15 and current_minute == 0
+        h1_status_15 := final_code
+    if current_hour == 16 and current_minute == 0
+        h1_status_16 := final_code
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              M15 AND M5 PRE-SESSION DETECTION
+//═══════════════════════════════════════════════════════════════════════════════
+
+var string m15_pre_status = ""
+var string m5_pre_status = ""
+
+session_hour = math.floor(session_start / 100)
+session_minute = session_start % 100
+
+m15_pre_hour = session_minute >= 15 ? session_hour : session_hour - 1
+m15_pre_minute = session_minute >= 15 ? session_minute - 15 : 60 + session_minute - 15
+
+m5_pre_hour = session_minute >= 5 ? session_hour : session_hour - 1
+m5_pre_minute = session_minute >= 5 ? session_minute - 5 : 60 + session_minute - 5
+
+if timeframe.period == "15"
+    if current_hour == m15_pre_hour and current_minute == m15_pre_minute
+        m15_pre_status := final_code
+
+if timeframe.period == "5"
+    if current_hour == m5_pre_hour and current_minute == m5_pre_minute
+        m5_pre_status := final_code
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              SESSION STATE ACCUMULATION
+//═══════════════════════════════════════════════════════════════════════════════
+
+if session_day != tracking_day or session_month != tracking_month or session_year != tracking_year
+    session_states := ""
+    last_code_added := ""
+    tracking_day := session_day
+    tracking_month := session_month
+    tracking_year := session_year
+
+if in_session and final_code != last_code_added and final_code != "n/a"
+    code_already_present = str.contains(session_states, final_code)
+    if not code_already_present
+        if session_states == ""
+            session_states := final_code
+        else
+            session_states := session_states + "+" + final_code
+    last_code_added := final_code
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              INFO BOX DISPLAY
+//═══════════════════════════════════════════════════════════════════════════════
+
+retracement_line_string = na(retracement_line) ? "na" : str.tostring(retracement_line, "#.#####")
+info_text = "trend: " + str.tostring(trend) + " | retr: " + str.tostring(retracement_active) + " | line: " + retracement_line_string
+
+date_string = str.tostring(tracking_day) + "/" + str.tostring(tracking_month) + "/" + str.tostring(tracking_year)
+
+h4_candles_string = date_string + " | " + str.tostring(h4_hour_1, "00") + ":00=" + (h4_status_1 != "" ? h4_status_1 : "?") + " | " + str.tostring(h4_hour_2, "00") + ":00=" + (h4_status_2 != "" ? h4_status_2 : "?")
+h1_candles_string = date_string + " | 14=" + (h1_status_14 != "" ? h1_status_14 : "?") + " | 15=" + (h1_status_15 != "" ? h1_status_15 : "?") + " | 16=" + (h1_status_16 != "" ? h1_status_16 : "?")
+
+m15_pre_string = date_string + " | " + str.tostring(m15_pre_hour, "00") + ":" + str.tostring(m15_pre_minute, "00") + "=" + (m15_pre_status != "" ? m15_pre_status : "?")
+m5_pre_string = date_string + " | " + str.tostring(m5_pre_hour, "00") + ":" + str.tostring(m5_pre_minute, "00") + "=" + (m5_pre_status != "" ? m5_pre_status : "?")
+
+if show_info_box and barstate.islast
+    var table info_table = table.new(position.top_right, 2, 10, border_width=2)
+    
+    table.cell(info_table, 0, 0, "timeframe", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 0, timeframe_name, text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    
+    table.cell(info_table, 0, 1, "state", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 1, final_state, text_color=color.white, bgcolor=box_color, text_size=size.small)
+    
+    table.cell(info_table, 0, 2, "code", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 2, final_code, text_color=color.white, bgcolor=box_color, text_size=size.large)
+    
+    table.cell(info_table, 0, 3, "info", text_color=color.white, bgcolor=color.gray, text_size=size.tiny)
+    table.cell(info_table, 1, 3, info_text, text_color=color.white, bgcolor=color.new(color.blue, 70), text_size=size.tiny)
+    
+    table.cell(info_table, 0, 4, "date", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 4, date_string, text_color=color.white, bgcolor=color.new(color.purple, 50), text_size=size.small)
+    
+    table.cell(info_table, 0, 5, "session states", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 5, session_states != "" ? session_states : "none", text_color=color.white, bgcolor=color.new(color.purple, 50), text_size=size.small)
+    
+    table.cell(info_table, 0, 6, "H4", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 6, h4_candles_string, text_color=color.white, bgcolor=color.new(color.orange, 50), text_size=size.small)
+    
+    table.cell(info_table, 0, 7, "H1", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 7, h1_candles_string, text_color=color.white, bgcolor=color.new(color.orange, 50), text_size=size.small)
+    
+    table.cell(info_table, 0, 8, "M15 pre", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 8, m15_pre_string, text_color=color.white, bgcolor=color.new(color.teal, 50), text_size=size.small)
+    
+    table.cell(info_table, 0, 9, "M5 pre", text_color=color.white, bgcolor=color.gray, text_size=size.small)
+    table.cell(info_table, 1, 9, m5_pre_string, text_color=color.white, bgcolor=color.new(color.teal, 50), text_size=size.small)
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              ALERT CONDITIONS
+//═══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(ta.crossover(close, current_high) or ta.crossunder(close, current_low), 'BOS Alert')
+alertcondition((ta.crossunder(close, previous_low) and high_retracement_complete) or (ta.crossover(close, previous_high) and low_retracement_complete), 'CHOC Alert')
+
+//═══════════════════════════════════════════════════════════════════════════════
+//                              PINE LOGS EXPORT
+//═══════════════════════════════════════════════════════════════════════════════
+
+if barstate.islast
+    if timeframe.period == "240"
+        log.info("{0} | H4: {1}, {2}", 
+                 date_string, 
+                 h4_status_1 != "" ? h4_status_1 : "?",
+                 h4_status_2 != "" ? h4_status_2 : "?")
+    else if timeframe.period == "60"
+        log.info("{0} | H1: {1}, {2}, {3}", 
+                 date_string, 
+                 h1_status_14 != "" ? h1_status_14 : "?",
+                 h1_status_15 != "" ? h1_status_15 : "?",
+                 h1_status_16 != "" ? h1_status_16 : "?")
+    else if timeframe.period == "15"
+        log.info("{0} | M15: {1} | {2}", 
+                 date_string,
+                 m15_pre_status != "" ? m15_pre_status : "?",
+                 session_states != "" ? session_states : "none")
+    else if timeframe.period == "5"
+        log.info("{0} | M5: {1} | {2}", 
+                 date_string,
+                 m5_pre_status != "" ? m5_pre_status : "?",
+                 session_states != "" ? session_states : "none")
