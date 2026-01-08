@@ -1,22 +1,20 @@
-1.0 = classic indicator from photon
+1.0 initial release basic logic from photon trading
 1.0 classic indicator from photon trading, market structure with wicks and retracement
 1.1 fixed photon trading classic indicator from bug of creation by iz algo in septber 2024, with wrong coch lines
 =================
-2.0 = indicator designed by me, 2 candles rules
-2.0 trend indicator designed by me, rules : trend countination candele body stessa direzione, servono 2 candele per startare il ritracciamento
+2.0 indicator designed by me, 2 candles rules (new logic)
 ================
-3.0 = indicatore photon ma multi tf
-3.0 classic indicator from photon trading ma permette di applicarlo sul tf di entrata, e poi selezionare la struttura che vogliamo vedere del tf superiore selezionato, colora lo schermo con i colori della sessione a livello di trend
-3.1 migliorato il modo di lavoro dell indicatore, ora va applicato solo sul tf di entrata e mostra fumetti con l indicazione di ogni stato della struttura.
-3.2 reso fluido per backtest lavoro dell indicatore indicando struttura htf selezionati con linee
+3.0 Upgraded photon logic (1.0) to Multitimeframe
+3.1 Improved the indicator workflow, after the application on the entry TF, show labels of structure status
+3.2 Improved lines
 ============
-4.0 classic indicator from photon trading ma con box che indica status struttura secondo codice H4,H1,M15,M5
-4.1 fixed version 4.0 with correct detection at coch
-4.2 added automation for listing all the structure status inside the sessions.
-4.3 added drawing the session + ticks label
-4.4 added date and hour at the beggining of the box of the sessions
+4.0 classic indicator from photon trading added box to show structure status H4,H1,M15,M5 with the 3 letters convetion
+4.1 fixed detection of the coch
+4.2 added automation for listing all the structure status inside the sessions (box fix).
+4.3 added drawing the session + ticks label (introduced the session indicator inside this)
+4.4 added date and hour (timestamp) at the beggining of the box of the sessions
 4.5 fixed position of the date hour write + added status for candle 0800/1200 h4, and 14,15,16 for h1
 4.6 added tracking for pre session candles m15 and m5
-4.7 ?
+4.7 cleaned the code pt 1
 4.8 no change in logic, just cleaned in asci section + all variables in english
 =========
